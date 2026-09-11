@@ -37,6 +37,7 @@ export default function Navbar() {
           <Link to="/" className="hover:text-indigo-600 transition-colors">Venues</Link>
           <Link to="/vendors" className="hover:text-indigo-600 transition-colors">Vendors</Link>
           <Link to="/packages" className="hover:text-indigo-600 transition-colors">Packages</Link>
+          <Link to="/admin-dashboard" className="hover:text-indigo-600 transition-colors font-black text-indigo-500">Admin</Link>
         </nav>
 
         {/* User / Auth Controls */}

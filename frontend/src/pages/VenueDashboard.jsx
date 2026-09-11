@@ -11,7 +11,7 @@ export default function VenueDashboard() {
   const navigate = useNavigate();
 
   // Retrieve user data to display their actual name
-  const storedUser = JSON.parse(localStorage.getItem('user')) || { name: 'Venue Owner' };
+  const storedUser = JSON.parse(localStorage.getItem('user')) || { name: 'Rafiq Hasan' };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -27,15 +27,25 @@ export default function VenueDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div 
+      className="min-h-screen flex relative"
+      style={{
+        backgroundImage: 'url("https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&q=80&w=2500")',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed'
+      }}
+    >
+      {/* Clear Dark Gradient Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-b from-gray-900/80 via-gray-900/50 to-gray-900/80 z-0"></div>
       
       {/* 1. SIDEBAR */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col fixed h-full z-10">
-        <div className="p-6 border-b border-gray-100 flex items-center gap-2">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+      <aside className="w-64 bg-[#fffdf8]/95 backdrop-blur-xl border-r border-white/40 flex flex-col fixed h-full z-20 shadow-2xl">
+        <div className="p-6 border-b border-white/40 flex items-center gap-2">
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg">
             <Building className="w-5 h-5 text-white" />
           </div>
-          <span className="text-xl font-black text-gray-900 tracking-tight">EventHub <span className="text-indigo-600 font-bold text-sm">Owner</span></span>
+          <span className="text-xl font-black text-gray-900 tracking-tight">EventHub <span className="text-indigo-600 font-bold text-sm">{storedUser.name}</span></span>
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
@@ -48,8 +58,8 @@ export default function VenueDashboard() {
                 onClick={() => setActiveTab(item.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
                   isActive 
-                    ? 'bg-indigo-50 text-indigo-700' 
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'bg-indigo-100/50 text-indigo-700 border border-indigo-200' 
+                    : 'text-gray-600 hover:bg-white/60 hover:text-gray-900'
                 }`}
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-indigo-600' : 'text-gray-400'}`} />
@@ -61,10 +71,10 @@ export default function VenueDashboard() {
       </aside>
 
       {/* 2. MAIN CONTENT AREA */}
-      <main className="flex-1 ml-64 flex flex-col min-h-screen">
+      <main className="flex-1 ml-64 flex flex-col min-h-screen relative z-10">
         
         {/* DASHBOARD TOP HEADER */}
-        <header className="h-20 bg-white border-b border-gray-200 px-10 flex items-center justify-between sticky top-0 z-20">
+        <header className="h-20 bg-[#fffdf8]/95 backdrop-blur-md border-b border-white/40 px-10 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           
           {/* --- UPDATED: Colorful Welcome Greeting --- */}
           <div>
@@ -84,26 +94,25 @@ export default function VenueDashboard() {
             
             <div className="h-8 w-px bg-gray-200"></div>
 
-            {/* User Profile & 3-Dot Menu (Reverted back to normal) */}
+            {/* User Profile & 3-Dot Menu */}
             <div className="relative">
               <button 
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex items-center gap-3 p-1.5 pr-2 hover:bg-gray-50 rounded-full transition-all border border-transparent hover:border-gray-200"
+                className="flex items-center gap-3 p-1.5 pr-2 hover:bg-white/60 rounded-full transition-all border border-transparent hover:border-white/50"
               >
-                <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center">
+                <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center border border-indigo-200">
                   <User className="w-5 h-5 text-indigo-600" />
                 </div>
-                <span className="text-sm font-bold text-gray-700">{storedUser.name}</span>
                 <MoreVertical className="w-5 h-5 text-gray-400" />
               </button>
 
               {/* Dropdown Box */}
               {isDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2">
-                  <div className="px-4 py-2 border-b border-gray-50 mb-1">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Account</p>
+                <div className="absolute right-0 mt-2 w-48 bg-[#fffdf8]/95 backdrop-blur-md rounded-xl shadow-2xl border border-white/40 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                  <div className="px-4 py-2 border-b border-white/40 mb-1">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Account</p>
                   </div>
-                  <button className="w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-indigo-600 flex items-center gap-2">
+                  <button className="w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-white/60 hover:text-indigo-600 flex items-center gap-2">
                     <User className="w-4 h-4" /> Profile Settings
                   </button>
                   <button 
@@ -124,8 +133,8 @@ export default function VenueDashboard() {
           {activeTab === 'overview' && (
             <header className="flex justify-between items-end mb-10">
               <div>
-                <h1 className="text-3xl font-black text-gray-900">Overview</h1>
-                <p className="text-gray-500 font-medium mt-1">Manage your properties and incoming requests.</p>
+                <h1 className="text-3xl font-black text-white drop-shadow-md">Overview</h1>
+                <p className="text-gray-300 font-medium mt-1 drop-shadow">Manage your properties and incoming requests.</p>
               </div>
               
               <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-md flex items-center gap-2">
@@ -146,8 +155,8 @@ export default function VenueDashboard() {
                 ].map((stat, idx) => {
                   const Icon = stat.icon;
                   return (
-                    <div key={idx} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-5">
-                      <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center shrink-0">
+                    <div key={idx} className="bg-[#fffdf8]/95 backdrop-blur-md p-6 rounded-3xl border border-white/40 shadow-2xl hover:-translate-y-1 transition-transform flex items-center gap-5">
+                      <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center shrink-0 border border-indigo-100">
                         <Icon className="w-7 h-7 text-indigo-600" />
                       </div>
                       <div>
@@ -163,10 +172,10 @@ export default function VenueDashboard() {
               </div>
 
               {/* Placeholder for Recent Bookings Table */}
-              <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8">
+              <div className="bg-[#fffdf8]/95 backdrop-blur-md rounded-3xl border border-white/40 shadow-2xl p-8">
                 <h3 className="text-lg font-black text-gray-900 mb-6">Recent Booking Requests</h3>
-                <div className="flex items-center justify-center py-12 border-2 border-dashed border-gray-100 rounded-2xl bg-gray-50/50">
-                  <p className="text-sm font-bold text-gray-400">No new booking requests this week.</p>
+                <div className="flex items-center justify-center py-12 border-2 border-dashed border-white/40 rounded-2xl bg-white/30">
+                  <p className="text-sm font-bold text-gray-500">No new booking requests this week.</p>
                 </div>
               </div>
             </div>
@@ -174,8 +183,8 @@ export default function VenueDashboard() {
 
           {/* Placeholders for other tabs */}
           {activeTab !== 'overview' && (
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 flex items-center justify-center min-h-[400px]">
-              <p className="text-gray-400 font-bold capitalize">{activeTab.replace('-', ' ')} Management Grid will go here.</p>
+            <div className="bg-[#fffdf8]/95 backdrop-blur-md rounded-3xl border border-white/40 shadow-2xl p-8 flex items-center justify-center min-h-[400px]">
+              <p className="text-gray-500 font-bold capitalize">{activeTab.replace('-', ' ')} Management Grid will go here.</p>
             </div>
           )}
         </div>
