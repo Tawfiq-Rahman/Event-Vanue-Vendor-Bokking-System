@@ -16,8 +16,6 @@ export default function Login() {
     setError('');
 
     try {
-      // In a real app, you would pass the role to the backend to verify 
-      // they are logging into the correct portal.
       const res = await fetch('http://localhost:5000/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -25,6 +23,8 @@ export default function Login() {
       });
       
       const data = await res.json();
+      
+      // This line catches the 403 "pending approval" error from your backend!
       if (!res.ok) throw new Error(data.message);
 
       localStorage.setItem('token', data.token);
@@ -36,11 +36,11 @@ export default function Login() {
       else navigate('/'); 
 
     } catch (err) {
+      // This displays the error on the screen
       setError(err.message);
     }
   };
 
-  // The 3 explicit roles for the system
   const roles = [
     { id: 'customer', title: 'Customer', icon: User },
     { id: 'venue_owner', title: 'Venue Owner', icon: MapPin },
@@ -50,7 +50,7 @@ export default function Login() {
   return (
     <div className="min-h-[calc(100vh-4rem)] relative flex items-center justify-center p-4">
       
-      {/* Background Image & Overlay (Using the premium gala image from the Home page) */}
+      {/* Background Image & Overlay */}
       <div className="absolute inset-0 z-0">
         <img 
           src="https://images.unsplash.com/photo-1561501878-aabd62634533?auto=format&fit=crop&q=80&w=2500" 
@@ -70,6 +70,7 @@ export default function Login() {
           <p className="text-sm text-gray-500 mt-2 font-medium">Select your portal and sign in</p>
         </div>
 
+        {/* Error Alert Box */}
         {error && (
           <div className="p-3 mb-6 text-sm font-semibold bg-red-50 text-red-600 rounded-xl border border-red-100 text-center">
             {error}
@@ -78,7 +79,7 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-5">
           
-          {/* 3-Type Role Selector */}
+          {/* Role Selector */}
           <div className="grid grid-cols-3 gap-3 mb-6">
             {roles.map((r) => {
               const Icon = r.icon;

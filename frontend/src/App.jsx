@@ -1,10 +1,12 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Search, CalendarDays, Users, Wallet, Star, MapPin } from 'lucide-react';
 import Navbar from './component/Navbar';
 import Login from './pages/logIn';
 import Register from './pages/register';
 import Vendor from './pages/Vendor';
 import Packages from './pages/Packages';
+import AdminDashboard from './pages/AdminDashboard';
+import VenueDashboard from './pages/VenueDashboard';
 
 function Home() {
   const featuredVenues = [
@@ -130,19 +132,38 @@ function Home() {
   );
 }
 
+// --- NEW ROUTING LOGIC STARTS HERE ---
+
+// 1. Create a Layout component to read the URL and hide the Navbar
+function Layout() {
+  const location = useLocation();
+  
+  // If the URL contains "dashboard", this will be true
+  const isDashboard = location.pathname.includes('-dashboard');
+
+  return (
+    <div className="min-h-screen bg-white">
+      {/* 2. Only render Navbar if we are NOT on a dashboard */}
+      {!isDashboard && <Navbar />}
+      
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/vendors" element={<Vendor />} />
+        <Route path="/packages" element={<Packages />} />
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
+        <Route path="/venue-dashboard" element={<VenueDashboard />} />
+      </Routes>
+    </div>
+  );
+}
+
+// 3. Keep App as the main wrapper for the Router
 export default function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-white">
-        <Navbar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/vendors" element={<Vendor />} />
-          <Route path="/packages" element={<Packages />} />
-        </Routes>
-      </div>
+      <Layout />
     </Router>
   );
 }
