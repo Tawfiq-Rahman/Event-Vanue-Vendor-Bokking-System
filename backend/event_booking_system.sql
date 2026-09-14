@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Sep 14, 2026 at 10:40 AM
+-- Generation Time: Sep 14, 2026 at 07:09 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -109,15 +109,20 @@ CREATE TABLE `users` (
   `role` enum('admin','venue_owner','vendor','customer') NOT NULL,
   `status` enum('pending','approved','rejected') DEFAULT 'pending',
   `phone` varchar(20) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `dob` date DEFAULT NULL,
+  `address` text DEFAULT NULL,
+  `profile_picture` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`, `status`, `phone`, `created_at`) VALUES
-(1, 'Rafiq Hasan', 'rafiq@gmail.com', '$2b$10$g/2e.42cPXFVJUUI8sohxuFoUDnYvSKTGq.ZV7hp/MYsvrzQxEP2u', 'venue_owner', 'approved', '', '2026-09-11 14:15:50');
+INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`, `status`, `phone`, `created_at`, `dob`, `address`, `profile_picture`) VALUES
+(1, 'Rafiq Hasan', 'rafiq@gmail.com', '$2b$10$g/2e.42cPXFVJUUI8sohxuFoUDnYvSKTGq.ZV7hp/MYsvrzQxEP2u', 'venue_owner', 'approved', '', '2026-09-11 14:15:50', NULL, '', 'http://localhost:5000/uploads/profiles/profile-1789402507099-356392749.jpeg'),
+(2, 'Tawfiq Rahman', 'tawfiq@gmail.com', '$2b$10$c1Qd.0ViGXBhSxee.mqxxu21HKzA7wSH3YGtg0ZYFXil7AFtisAga', 'customer', 'approved', '', '2026-09-14 13:44:15', NULL, NULL, 'http://localhost:5000/uploads/profiles/profile-1789401182362-689578281.jpeg'),
+(3, 'Hamim Rahman', 'hamim@gmail.com', '$2b$10$xRBtvZos8rhPWzyAS9NsbOTOeT5siWVSk3FKb9/Ms5kjhxhwJwmmK', 'vendor', 'approved', '', '2026-09-14 15:09:10', NULL, NULL, 'http://localhost:5000/uploads/profiles/profile-1789402691236-624597916.jpeg');
 
 -- --------------------------------------------------------
 
@@ -133,6 +138,13 @@ CREATE TABLE `vendors` (
   `starting_rate` decimal(10,2) NOT NULL,
   `image_url` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `vendors`
+--
+
+INSERT INTO `vendors` (`id`, `user_id`, `service_type`, `portfolio_description`, `starting_rate`, `image_url`) VALUES
+(1, 3, 'catering', 'Default portfolio', 0.00, NULL);
 
 -- --------------------------------------------------------
 
@@ -255,13 +267,13 @@ ALTER TABLE `reviews`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `vendors`
 --
 ALTER TABLE `vendors`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `venues`

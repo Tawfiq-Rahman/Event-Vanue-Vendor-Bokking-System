@@ -33,6 +33,7 @@ export default function Login() {
       // Route actors to their specific dashboards based on the selected role
       if (formData.role === 'vendor') navigate('/vendor-dashboard');
       else if (formData.role === 'venue_owner') navigate('/venue-dashboard');
+      else if (formData.role === 'customer') navigate('/customer-dashboard');
       else navigate('/'); 
 
     } catch (err) {

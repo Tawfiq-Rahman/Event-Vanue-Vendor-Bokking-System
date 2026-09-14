@@ -11,6 +11,8 @@ import Packages from './pages/Packages';
 import PackageDetail from './pages/PackageDetail';
 import AdminDashboard from './pages/AdminDashboard';
 import VenueDashboard from './pages/VenueDashboard';
+import CustomerDashboard from './pages/CustomerDashboard';
+import VendorDashboard from './pages/VendorDashboard'; // NEW LINE
 
 function Home() {
   return (
@@ -152,6 +154,8 @@ function Layout() {
         <Route path="/packages/:slug" element={<PackageDetail />} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
         <Route path="/venue-dashboard" element={<VenueDashboard />} />
+        <Route path="/customer-dashboard" element={<CustomerDashboard />} />
+        <Route path="/vendor-dashboard" element={<VendorDashboard />} />
       </Routes>
     </div>
   );
