@@ -7,7 +7,6 @@ const db = require('../db'); // Pulls in your MySQL connection from db.js
 // ==========================================
 router.get('/pending-users', async (req, res) => {
   try {
-    // Select all users where the approval status is 'pending'
     const [pendingUsers] = await db.query(
       "SELECT id, name, email, role, status, created_at FROM users WHERE status = 'pending'"
     );
@@ -15,6 +14,21 @@ router.get('/pending-users', async (req, res) => {
   } catch (error) {
     console.error("Error fetching pending users:", error);
     res.status(500).json({ message: 'Server error while fetching users' });
+  }
+});
+
+// ==========================================
+// 1.5 GET ALL USERS (Any status)
+// ==========================================
+router.get('/users', async (req, res) => {
+  try {
+    const [allUsers] = await db.query(
+      "SELECT id, name, email, role, status, created_at FROM users ORDER BY created_at DESC"
+    );
+    res.status(200).json(allUsers);
+  } catch (error) {
+    console.error("Error fetching all users:", error);
+    res.status(500).json({ message: 'Server error while fetching all users' });
   }
 });
 
