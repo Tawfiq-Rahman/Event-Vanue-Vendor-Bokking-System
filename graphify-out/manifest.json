@@ -1,0 +1,110 @@
+{
+  "backend/db.js": {
+    "mtime": 1789052045.1912632,
+    "seen": 1789392286.1285543,
+    "ast_hash": "bd624a7ce9337d3ee714541f9b8096f2",
+    "semantic_hash": "bd624a7ce9337d3ee714541f9b8096f2"
+  },
+  "backend/models/user.js": {
+    "mtime": 1789139972.741297,
+    "seen": 1789392286.1285589,
+    "ast_hash": "28d105a7eff05fdd6c5df4afb8913f83",
+    "semantic_hash": "28d105a7eff05fdd6c5df4afb8913f83"
+  },
+  "backend/package.json": {
+    "mtime": 1789140272.9169292,
+    "seen": 1789392286.1285608,
+    "ast_hash": "e834094d8423ced323918c0708c69a68",
+    "semantic_hash": "e834094d8423ced323918c0708c69a68"
+  },
+  "backend/routes/adminRoutes.js": {
+    "mtime": 1789141990.9430866,
+    "seen": 1789392286.1285622,
+    "ast_hash": "00da43ed6d984ed798d13d4078376bdb",
+    "semantic_hash": "00da43ed6d984ed798d13d4078376bdb"
+  },
+  "backend/routes/authRoute.js": {
+    "mtime": 1789145385.9702728,
+    "seen": 1789392286.1285632,
+    "ast_hash": "fd3be7e766d3998814131cb669f5cd5e",
+    "semantic_hash": "fd3be7e766d3998814131cb669f5cd5e"
+  },
+  "backend/server.js": {
+    "mtime": 1789141982.5814135,
+    "seen": 1789392286.1285641,
+    "ast_hash": "ab35133f1c092985d34e57424b075c51",
+    "semantic_hash": "ab35133f1c092985d34e57424b075c51"
+  },
+  "frontend/.oxlintrc.json": {
+    "mtime": 1789050620.108892,
+    "seen": 1789392286.1285655,
+    "ast_hash": "5e6e3cea3e89137071c142dd7835b0ef",
+    "semantic_hash": "5e6e3cea3e89137071c142dd7835b0ef"
+  },
+  "frontend/package.json": {
+    "mtime": 1789051421.0766592,
+    "seen": 1789392286.1285663,
+    "ast_hash": "1afb267a4db2201b50a1f23d6fb5e779",
+    "semantic_hash": "1afb267a4db2201b50a1f23d6fb5e779"
+  },
+  "frontend/src/App.jsx": {
+    "mtime": 1789146824.7148056,
+    "seen": 1789392286.1285677,
+    "ast_hash": "8454830cbc6f5ff9f8df50a12da8d6c0",
+    "semantic_hash": "8454830cbc6f5ff9f8df50a12da8d6c0"
+  },
+  "frontend/src/component/Navbar.jsx": {
+    "mtime": 1789157387.5560832,
+    "seen": 1789392286.1285686,
+    "ast_hash": "2e7d266a8ef5585c60f5fdc403ce8d0d",
+    "semantic_hash": "2e7d266a8ef5585c60f5fdc403ce8d0d"
+  },
+  "frontend/src/main.jsx": {
+    "mtime": 1789050620.1253493,
+    "seen": 1789392286.1285696,
+    "ast_hash": "e13723e2574429d9a6d849727e3ff695",
+    "semantic_hash": "e13723e2574429d9a6d849727e3ff695"
+  },
+  "frontend/src/pages/AdminDashboard.jsx": {
+    "mtime": 1789163118.5045364,
+    "seen": 1789392286.1285706,
+    "ast_hash": "8e213749e1b0a97ab102ea1d0c9c80f6",
+    "semantic_hash": "8e213749e1b0a97ab102ea1d0c9c80f6"
+  },
+  "frontend/src/pages/Packages.jsx": {
+    "mtime": 1789072214.226106,
+    "seen": 1789392286.1285717,
+    "ast_hash": "2faa82d41c47911872e9f6feeb9ddadb",
+    "semantic_hash": "2faa82d41c47911872e9f6feeb9ddadb"
+  },
+  "frontend/src/pages/Vendor.jsx": {
+    "mtime": 1789073382.175666,
+    "seen": 1789392286.1285727,
+    "ast_hash": "d7886a636428485c207daae32bcea8bb",
+    "semantic_hash": "d7886a636428485c207daae32bcea8bb"
+  },
+  "frontend/src/pages/VenueDashboard.jsx": {
+    "mtime": 1789159390.7198095,
+    "seen": 1789392286.1285734,
+    "ast_hash": "4374c13dc101776d067b31d09edf320c",
+    "semantic_hash": "4374c13dc101776d067b31d09edf320c"
+  },
+  "frontend/src/pages/logIn.jsx": {
+    "mtime": 1789140310.9510212,
+    "seen": 1789392286.1285744,
+    "ast_hash": "2423df68ae85c5a95ed02be158752b9c",
+    "semantic_hash": "2423df68ae85c5a95ed02be158752b9c"
+  },
+  "frontend/src/pages/register.jsx": {
+    "mtime": 1789073997.3283472,
+    "seen": 1789392286.1285758,
+    "ast_hash": "4033cbab1d2753ad78c30b2b6abd12fd",
+    "semantic_hash": "4033cbab1d2753ad78c30b2b6abd12fd"
+  },
+  "frontend/vite.config.js": {
+    "mtime": 1789050974.7329004,
+    "seen": 1789392286.128577,
+    "ast_hash": "f955ee4eeae138a29188424d174b28b7",
+    "semantic_hash": "f955ee4eeae138a29188424d174b28b7"
+  }
+}
