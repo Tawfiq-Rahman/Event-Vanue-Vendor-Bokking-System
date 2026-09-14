@@ -4,20 +4,15 @@ import Navbar from './component/Navbar';
 import Login from './pages/logIn';
 import Register from './pages/register';
 import Vendor from './pages/Vendor';
+import VendorDetail from './pages/VendorDetail';
+import VenueDetail from './pages/VenueDetail';
+import { featuredVenues } from './data/venues';
 import Packages from './pages/Packages';
+import PackageDetail from './pages/PackageDetail';
 import AdminDashboard from './pages/AdminDashboard';
 import VenueDashboard from './pages/VenueDashboard';
 
 function Home() {
-  const featuredVenues = [
-    { name: 'Grand Plaza Resort', loc: 'Downtown City Center', price: '$1,200', cap: 'Up to 500 Guests', img: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=600&auto=format&fit=crop' },
-    { name: 'The Glass House', loc: 'Riverside District', price: '$2,500', cap: 'Up to 300 Guests', img: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?q=80&w=600&auto=format&fit=crop' },
-    { name: 'Heritage Banquet', loc: 'Old Town Square', price: '$850', cap: 'Up to 200 Guests', img: 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=600&auto=format&fit=crop' },
-    { name: 'Crystal Pavilion', loc: 'Uptown Business Park', price: '$3,200', cap: 'Up to 1000 Guests', img: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=600&auto=format&fit=crop' },
-    { name: 'Sapphire Lounge', loc: 'Westside Marina', price: '$950', cap: 'Up to 150 Guests', img: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?q=80&w=600&auto=format&fit=crop' },
-    { name: 'Emerald Estate', loc: 'Outskirts Countryside', price: '$1,800', cap: 'Up to 400 Guests', img: 'https://images.unsplash.com/photo-1532712938310-34cb3982ef74?q=80&w=600&auto=format&fit=crop' }
-  ];
-
   return (
     <div className="min-h-screen bg-gray-50">
       
@@ -101,8 +96,8 @@ function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {featuredVenues.map((venue, idx) => (
-            <div key={idx} className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-300 cursor-pointer group flex flex-col">
+          {featuredVenues.map((venue) => (
+            <Link to={`/venues/${venue.slug}`} key={venue.slug} className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-300 cursor-pointer group flex flex-col">
               <div className="h-56 overflow-hidden relative">
                 <img src={venue.img} alt={venue.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                 <div className="absolute top-4 right-4 bg-white/95 backdrop-blur px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm">
@@ -124,7 +119,7 @@ function Home() {
                   </div>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>
@@ -151,7 +146,10 @@ function Layout() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/vendors" element={<Vendor />} />
+        <Route path="/venues/:slug" element={<VenueDetail />} />
+        <Route path="/vendors/:slug" element={<VendorDetail />} />
         <Route path="/packages" element={<Packages />} />
+        <Route path="/packages/:slug" element={<PackageDetail />} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
         <Route path="/venue-dashboard" element={<VenueDashboard />} />
       </Routes>
