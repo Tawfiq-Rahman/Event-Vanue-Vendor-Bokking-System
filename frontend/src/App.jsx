@@ -7,6 +7,8 @@ import Vendor from './pages/Vendor';
 import Packages from './pages/Packages';
 import AdminDashboard from './pages/AdminDashboard';
 import VenueDashboard from './pages/VenueDashboard';
+import CustomerDashboard from './pages/CustomerDashboard';
+import VendorDashboard from './pages/VendorDashboard'; // NEW LINE
 
 function Home() {
   const featuredVenues = [
@@ -154,6 +156,8 @@ function Layout() {
         <Route path="/packages" element={<Packages />} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
         <Route path="/venue-dashboard" element={<VenueDashboard />} />
+        <Route path="/customer-dashboard" element={<CustomerDashboard />} />
+        <Route path="/vendor-dashboard" element={<VendorDashboard />} />
       </Routes>
     </div>
   );
