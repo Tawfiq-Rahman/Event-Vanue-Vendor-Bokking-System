@@ -8,7 +8,9 @@ export default function Register() {
     email: '',
     phone: '',
     password: '',
-    role: 'customer'
+    role: 'customer',
+    government_id: '',
+    business_license_id: ''
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -28,12 +30,8 @@ export default function Register() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
 
-      if (formData.role === 'customer') {
-        setSuccess('Account created! Redirecting to login...');
-        setTimeout(() => navigate('/login'), 1500);
-      } else {
-        setSuccess('Registration submitted! Please wait for Admin approval.');
-      }
+      setSuccess('Registration submitted! Please wait for Admin approval.');
+      setTimeout(() => navigate('/login'), 2500); // Redirect everyone after showing message
     } catch (err) {
       setError(err.message);
     }
@@ -133,6 +131,31 @@ export default function Register() {
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 />
               </div>
+
+              {(formData.role === 'vendor' || formData.role === 'venue_owner') && (
+                <>
+                  <div>
+                    <label className="block text-xs font-black text-gray-700 uppercase mb-1.5 tracking-wider ml-1">Government ID</label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                      placeholder="Enter ID number"
+                      onChange={(e) => setFormData({ ...formData, government_id: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-gray-700 uppercase mb-1.5 tracking-wider ml-1">Business License ID</label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                      placeholder="Enter License ID"
+                      onChange={(e) => setFormData({ ...formData, business_license_id: e.target.value })}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             <button

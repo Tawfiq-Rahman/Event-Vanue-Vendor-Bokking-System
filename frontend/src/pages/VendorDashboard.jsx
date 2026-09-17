@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { ClipboardList, Briefcase, MessageSquare, Settings, LogOut, CheckCircle, XCircle, Clock, Check, Edit3 } from 'lucide-react';
+import { ClipboardList, Briefcase, MessageSquare, Settings, LogOut, CheckCircle, XCircle, Clock, Check, Edit3, Send } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function VendorDashboard() {
   const [activeTab, setActiveTab] = useState('requests');
   const [requests, setRequests] = useState([]);
+  const [historyRequests, setHistoryRequests] = useState([]);
   const [portfolio, setPortfolio] = useState({ service_type: 'catering', portfolio_description: '', starting_rate: '', image_url: '' });
   const [isPortfolioSetup, setIsPortfolioSetup] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -16,6 +17,12 @@ export default function VendorDashboard() {
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '' });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  
+  // Chat State
+  const [chatContacts, setChatContacts] = useState([]);
+  const [activeChat, setActiveChat] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
   
   const navigate = useNavigate();
 
@@ -33,6 +40,13 @@ export default function VendorDashboard() {
         if (reqResponse.ok) {
           const reqData = await reqResponse.json();
           setRequests(reqData);
+        }
+        
+        // Fetch History
+        const histResponse = await fetch('http://localhost:5000/api/vendor/history', { headers });
+        if (histResponse.ok) {
+          const histData = await histResponse.json();
+          setHistoryRequests(histData);
         }
 
         // Fetch Portfolio
@@ -71,6 +85,59 @@ export default function VendorDashboard() {
     
     fetchData();
   }, []);
+
+  const fetchChatContacts = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/vendor/chat-contacts', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) setChatContacts(await res.json());
+    } catch (err) { console.error(err); }
+  };
+
+  const fetchMessages = async () => {
+    if (!activeChat) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/vendor/messages/${activeChat.id}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) setMessages(await res.json());
+    } catch (err) { console.error(err); }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !activeChat) return;
+
+    try {
+      const res = await fetch('http://localhost:5000/api/vendor/messages', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}` 
+        },
+        body: JSON.stringify({ receiver_id: activeChat.id, message: newMessage })
+      });
+      if (res.ok) {
+        setNewMessage('');
+        fetchMessages();
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'messages') {
+      fetchChatContacts();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeChat) {
+      fetchMessages();
+      const interval = setInterval(fetchMessages, 5000); // Polling for demo
+      return () => clearInterval(interval);
+    }
+  }, [activeChat]);
 
   const handleUpdateStatus = async (id, newStatus) => {
     try {
@@ -218,9 +285,11 @@ export default function VendorDashboard() {
   };
 
   const navItems = [
-    { id: 'requests', label: 'Service Requests', icon: ClipboardList },
-    { id: 'portfolio', label: 'Portfolio & Packages', icon: Briefcase },
+    { id: 'requests', label: 'Requests', icon: ClipboardList },
+    { id: 'history', label: 'History', icon: Clock },
+    { id: 'portfolio', label: 'My Portfolio', icon: Briefcase },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const getStatusColor = (status) => {
@@ -392,6 +461,43 @@ export default function VendorDashboard() {
           </div>
         )}
 
+        {activeTab === 'history' && (
+          <div className="bg-[#fffdf8]/95 backdrop-blur-xl rounded-3xl border border-white/40 shadow-2xl p-8 max-w-5xl mx-auto">
+            <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2"><Clock className="w-5 h-5 text-indigo-600"/> Request History</h3>
+            
+            {historyRequests.length === 0 ? (
+              <div className="text-center py-16">
+                <Clock className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                <p className="text-gray-500 font-bold mb-4">No past requests found.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {historyRequests.map(req => (
+                  <div key={req.id} className="p-6 bg-white border border-gray-100 rounded-2xl shadow-sm flex flex-col md:flex-row gap-6 justify-between items-center opacity-80 hover:opacity-100 transition-opacity">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h4 className="text-lg font-black text-gray-900">{req.customer_name}</h4>
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase ${
+                          req.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                          req.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {req.status}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-600 mb-1">
+                        <span className="text-gray-400">Venue:</span> {req.venue_name}
+                      </p>
+                      <p className="text-sm font-medium text-gray-600 mb-1">
+                        <span className="text-gray-400">Event Date:</span> {new Date(req.event_date).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'portfolio' && (
           <div className="bg-[#fffdf8]/95 backdrop-blur-xl rounded-3xl border border-white/40 shadow-2xl p-8 max-w-4xl mx-auto">
             <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2"><Edit3 className="w-5 h-5 text-indigo-600"/> Edit Service Portfolio</h3>
@@ -465,10 +571,97 @@ export default function VendorDashboard() {
         )}
 
         {activeTab === 'messages' && (
-          <div className="bg-[#fffdf8]/95 backdrop-blur-xl rounded-3xl border border-white/40 shadow-2xl p-10 text-center max-w-2xl mx-auto">
-             <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-             <h2 className="text-2xl font-black text-gray-900 mb-2">Customer Messages</h2>
-             <p className="text-gray-500">Your chat history with customers inquiring about your services will appear here.</p>
+          <div className="bg-[#fffdf8]/95 backdrop-blur-xl rounded-3xl border border-white/40 shadow-2xl overflow-hidden flex h-[600px]">
+            {/* Contacts Sidebar */}
+            <div className="w-1/3 border-r border-gray-200 bg-gray-50/50 flex flex-col">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="font-black text-gray-900">Customers</h3>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {chatContacts.length === 0 ? (
+                  <p className="p-4 text-gray-500 text-sm text-center">No customers yet.</p>
+                ) : (
+                  chatContacts.map(contact => (
+                    <button 
+                      key={contact.id} 
+                      onClick={() => setActiveChat(contact)}
+                      className={`w-full text-left p-4 border-b border-gray-100 flex items-center gap-3 transition-colors ${activeChat?.id === contact.id ? 'bg-indigo-50 border-indigo-100' : 'hover:bg-white'}`}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+                        {contact.name.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="font-bold text-gray-900">{contact.name}</div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+            
+            {/* Chat Area */}
+            <div className="flex-1 flex flex-col bg-white/50">
+              {activeChat ? (
+                <>
+                  <div className="p-4 border-b border-gray-200 bg-white flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+                      {activeChat.name.charAt(0)}
+                    </div>
+                    <div>
+                      <h3 className="font-black text-gray-900">{activeChat.name}</h3>
+                      <p className="text-xs text-green-600 font-bold">Online</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
+                    {messages.length === 0 ? (
+                      <div className="m-auto text-center">
+                        <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                        <p className="text-gray-500 font-medium">No messages yet. Send a hello!</p>
+                      </div>
+                    ) : (
+                      messages.map(msg => {
+                        const isMine = msg.sender_id === user.id;
+                        return (
+                          <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[70%] p-3 rounded-2xl ${isMine ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-gray-100 text-gray-900 rounded-tl-none'}`}>
+                              <p className="text-sm">{msg.message}</p>
+                              <p className={`text-[10px] mt-1 text-right ${isMine ? 'text-indigo-200' : 'text-gray-400'}`}>
+                                {new Date(msg.sent_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  
+                  <div className="p-4 bg-white border-t border-gray-200">
+                    <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                      <input 
+                        type="text" 
+                        value={newMessage}
+                        onChange={e => setNewMessage(e.target.value)}
+                        placeholder="Type your message..."
+                        className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                      />
+                      <button 
+                        type="submit"
+                        disabled={!newMessage.trim()}
+                        className="p-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all flex-shrink-0"
+                      >
+                        <Send className="w-5 h-5" />
+                      </button>
+                    </form>
+                  </div>
+                </>
+              ) : (
+                <div className="m-auto text-center">
+                  <MessageSquare className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold text-gray-400">Select a conversation</h3>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

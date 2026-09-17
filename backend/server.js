@@ -25,6 +25,22 @@ app.use('/api/customer', customerRoutes);
 app.use('/api/vendor', vendorRoutes);
 app.use('/api/venue-owner', venueOwnerRoutes);
 
+// Public API for Venues
+app.get('/api/venues/public', async (req, res) => {
+  try {
+    const [venues] = await db.query(`
+      SELECT v.*, u.name as owner_name, u.id as owner_user_id 
+      FROM venues v 
+      LEFT JOIN users u ON v.owner_id = u.id 
+      ORDER BY v.created_at DESC
+    `);
+    res.status(200).json(venues);
+  } catch (error) {
+    console.error("Error fetching public venues:", error);
+    res.status(500).json({ message: 'Server error fetching venues' });
+  }
+});
+
 // 4. Health check endpoint (Great for testing if the DB is connected!)
 app.get('/api/health', async (req, res) => {
   try {

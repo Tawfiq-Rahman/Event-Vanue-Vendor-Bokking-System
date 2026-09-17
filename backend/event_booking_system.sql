@@ -112,17 +112,16 @@ CREATE TABLE `users` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `dob` date DEFAULT NULL,
   `address` text DEFAULT NULL,
-  `profile_picture` text DEFAULT NULL
+  `profile_picture` text DEFAULT NULL,
+  `government_id` varchar(255) DEFAULT NULL,
+  `business_license_id` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`, `status`, `phone`, `created_at`, `dob`, `address`, `profile_picture`) VALUES
-(1, 'Rafiq Hasan', 'rafiq@gmail.com', '$2b$10$g/2e.42cPXFVJUUI8sohxuFoUDnYvSKTGq.ZV7hp/MYsvrzQxEP2u', 'venue_owner', 'approved', '', '2026-09-11 14:15:50', NULL, '', 'http://localhost:5000/uploads/profiles/profile-1789402507099-356392749.jpeg'),
-(2, 'Tawfiq Rahman', 'tawfiq@gmail.com', '$2b$10$c1Qd.0ViGXBhSxee.mqxxu21HKzA7wSH3YGtg0ZYFXil7AFtisAga', 'customer', 'approved', '', '2026-09-14 13:44:15', NULL, NULL, 'http://localhost:5000/uploads/profiles/profile-1789401182362-689578281.jpeg'),
-(3, 'Hamim Rahman', 'hamim@gmail.com', '$2b$10$xRBtvZos8rhPWzyAS9NsbOTOeT5siWVSk3FKb9/Ms5kjhxhwJwmmK', 'vendor', 'approved', '', '2026-09-14 15:09:10', NULL, NULL, 'http://localhost:5000/uploads/profiles/profile-1789402691236-624597916.jpeg');
+
 
 -- --------------------------------------------------------
 
@@ -143,8 +142,7 @@ CREATE TABLE `vendors` (
 -- Dumping data for table `vendors`
 --
 
-INSERT INTO `vendors` (`id`, `user_id`, `service_type`, `portfolio_description`, `starting_rate`, `image_url`) VALUES
-(1, 3, 'catering', 'Default portfolio', 0.00, NULL);
+
 
 -- --------------------------------------------------------
 
@@ -325,6 +323,34 @@ ALTER TABLE `vendors`
 --
 ALTER TABLE `venues`
   ADD CONSTRAINT `venues_ibfk_1` FOREIGN KEY (`owner_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `system_settings`
+--
+CREATE TABLE `system_settings` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `commission_rate` DECIMAL(5,2) DEFAULT 10.00,
+  `cancellation_rules` TEXT,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `system_settings` (`commission_rate`, `cancellation_rules`) VALUES (10.00, "Default cancellation policy applies.");
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `announcements`
+--
+CREATE TABLE `announcements` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `title` VARCHAR(255) NOT NULL,
+  `message` TEXT NOT NULL,
+  `target_role` ENUM('all', 'customer', 'venue_owner', 'vendor') DEFAULT 'all',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

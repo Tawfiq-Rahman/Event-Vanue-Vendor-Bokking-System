@@ -4,17 +4,33 @@ import Navbar from './component/Navbar';
 import Login from './pages/logIn';
 import Register from './pages/register';
 import Vendor from './pages/Vendor';
+import { useState, useEffect } from 'react';
 import VendorDetail from './pages/VendorDetail';
 import VenueDetail from './pages/VenueDetail';
-import { featuredVenues } from './data/venues';
 import Packages from './pages/Packages';
 import PackageDetail from './pages/PackageDetail';
 import AdminDashboard from './pages/AdminDashboard';
 import VenueDashboard from './pages/VenueDashboard';
 import CustomerDashboard from './pages/CustomerDashboard';
-import VendorDashboard from './pages/VendorDashboard'; // NEW LINE
+import VendorDashboard from './pages/VendorDashboard';
+import Venues from './pages/Venues'; // NEW LINE
 
 function Home() {
+  const [featuredVenues, setFeaturedVenues] = useState([]);
+
+  useEffect(() => {
+    const fetchVenues = async () => {
+      try {
+        const res = await fetch('http://localhost:5000/api/venues/public');
+        const data = await res.json();
+        setFeaturedVenues(data);
+      } catch (err) {
+        console.error("Failed to fetch venues:", err);
+      }
+    };
+    fetchVenues();
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50">
       
@@ -98,31 +114,34 @@ function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {featuredVenues.map((venue) => (
-            <Link to={`/venues/${venue.slug}`} key={venue.slug} className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-300 cursor-pointer group flex flex-col">
-              <div className="h-56 overflow-hidden relative">
-                <img src={venue.img} alt={venue.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                <div className="absolute top-4 right-4 bg-white/95 backdrop-blur px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm">
-                  <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" /> 4.9
-                </div>
-              </div>
-              <div className="p-6 flex flex-col flex-grow">
-                <h3 className="font-black text-xl text-gray-900">{venue.name}</h3>
-                <div className="flex items-center text-gray-500 text-sm mt-2 mb-6">
-                  <MapPin className="w-4 h-4 mr-1 text-gray-400" /> {venue.loc}
-                </div>
-                <div className="mt-auto pt-5 border-t border-gray-100 flex justify-between items-center">
-                  <div>
-                    <span className="font-black text-gray-900 text-xl">{venue.price}</span>
-                    <span className="text-gray-500 text-sm font-medium"> / day</span>
-                  </div>
-                  <div className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg">
-                    {venue.cap}
+          {featuredVenues.slice(-6).reverse().map((venue) => {
+            const slug = venue.title.toLowerCase().replace(/ /g, '-');
+            return (
+              <Link to={`/venues/${slug}`} key={venue.id || slug} className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-300 cursor-pointer group flex flex-col">
+                <div className="h-56 overflow-hidden relative">
+                  <img src={venue.image_url} alt={venue.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                  <div className="absolute top-4 right-4 bg-white/95 backdrop-blur px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm">
+                    <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" /> 4.9
                   </div>
                 </div>
-              </div>
-            </Link>
-          ))}
+                <div className="p-6 flex flex-col flex-grow">
+                  <h3 className="font-black text-xl text-gray-900">{venue.title}</h3>
+                  <div className="flex items-center text-gray-500 text-sm mt-2 mb-6">
+                    <MapPin className="w-4 h-4 mr-1 text-gray-400" /> {venue.location}
+                  </div>
+                  <div className="mt-auto pt-5 border-t border-gray-100 flex justify-between items-center">
+                    <div>
+                      <span className="font-black text-gray-900 text-xl">${venue.price_per_day}</span>
+                      <span className="text-gray-500 text-sm font-medium"> / day</span>
+                    </div>
+                    <div className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg">
+                      Up to {venue.capacity}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -148,6 +167,7 @@ function Layout() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/vendors" element={<Vendor />} />
+        <Route path="/venues" element={<Venues />} />
         <Route path="/venues/:slug" element={<VenueDetail />} />
         <Route path="/vendors/:slug" element={<VendorDetail />} />
         <Route path="/packages" element={<Packages />} />
