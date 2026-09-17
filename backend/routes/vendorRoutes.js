@@ -271,4 +271,106 @@ router.put('/password', authenticateToken, async (req, res) => {
   }
 });
 
+// ==========================================
+// 8. CHAT: GET CONTACTS
+// ==========================================
+router.get('/chat-contacts', authenticateToken, async (req, res) => {
+  try {
+    const vendorUserId = req.user.id;
+    
+    // Vendor chat contacts are customers who have booked them
+    const [vendors] = await db.query('SELECT id FROM vendors WHERE user_id = ?', [vendorUserId]);
+    if (vendors.length === 0) return res.status(200).json([]);
+    
+    const vendorId = vendors[0].id;
+
+    // Get unique customers from bookings
+    const query = `
+      SELECT DISTINCT u.id, u.name, u.role
+      FROM booking_vendors bv
+      JOIN bookings b ON bv.booking_id = b.id
+      JOIN users u ON b.customer_id = u.id
+      WHERE bv.vendor_id = ?
+    `;
+    
+    const [contacts] = await db.query(query, [vendorId]);
+    res.status(200).json(contacts);
+  } catch (error) {
+    console.error("Error fetching chat contacts:", error);
+    res.status(500).json({ message: 'Server error fetching contacts' });
+  }
+});
+
+// ==========================================
+// 9. CHAT: GET MESSAGES
+// ==========================================
+router.get('/messages/:partnerId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const partnerId = req.params.partnerId;
+
+    const query = `
+      SELECT id, sender_id, receiver_id, message, sent_at
+      FROM messages
+      WHERE (sender_id = ? AND receiver_id = ?) 
+         OR (sender_id = ? AND receiver_id = ?)
+      ORDER BY sent_at ASC
+    `;
+    
+    const [messages] = await db.query(query, [userId, partnerId, partnerId, userId]);
+    res.status(200).json(messages);
+  } catch (error) {
+    console.error("Error fetching messages:", error);
+    res.status(500).json({ message: 'Server error fetching messages' });
+  }
+});
+
+// ==========================================
+// 10. CHAT: SEND MESSAGE
+// ==========================================
+router.post('/messages', authenticateToken, async (req, res) => {
+  try {
+    const senderId = req.user.id;
+    const { receiver_id, message } = req.body;
+
+    if (!receiver_id || !message) {
+      return res.status(400).json({ message: 'Receiver ID and message are required.' });
+    }
+
+    const query = 'INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)';
+    await db.query(query, [senderId, receiver_id, message]);
+    
+    res.status(201).json({ message: 'Message sent successfully' });
+  } catch (error) {
+    console.error("Error sending message:", error);
+    res.status(500).json({ message: 'Server error sending message' });
+  }
+});
+
+// ==========================================
+// 11. GET VENDOR HISTORY
+// ==========================================
+router.get('/history', authenticateToken, async (req, res) => {
+  try {
+    const vendorId = req.user.id;
+    const query = `
+      SELECT bv.*, 
+             v.title as venue_name, v.location,
+             u.name as customer_name, u.phone as customer_phone,
+             b.event_date, bv.service_status as status
+      FROM booking_vendors bv
+      JOIN bookings b ON bv.booking_id = b.id
+      JOIN venues v ON b.venue_id = v.id
+      JOIN users u ON b.customer_id = u.id
+      WHERE bv.vendor_id = ? AND bv.service_status != 'pending'
+      ORDER BY b.event_date DESC
+    `;
+    const [requests] = await db.query(query, [vendorId]);
+    res.status(200).json(requests);
+  } catch (error) {
+    console.error("Error fetching vendor history:", error);
+    res.status(500).json({ message: 'Server error fetching history' });
+  }
+});
+
 module.exports = router;
