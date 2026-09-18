@@ -41,6 +41,21 @@ app.get('/api/venues/public', async (req, res) => {
   }
 });
 
+// Public API for Vendors
+app.get('/api/vendors/public', async (req, res) => {
+  try {
+    const [vendors] = await db.query(`
+      SELECT v.* 
+      FROM vendors v 
+      ORDER BY v.id ASC
+    `);
+    res.status(200).json(vendors);
+  } catch (error) {
+    console.error("Error fetching public vendors:", error);
+    res.status(500).json({ message: 'Server error fetching vendors' });
+  }
+});
+
 // 4. Health check endpoint (Great for testing if the DB is connected!)
 app.get('/api/health', async (req, res) => {
   try {

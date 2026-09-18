@@ -18,6 +18,17 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
+const vendorStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, '../uploads/'));
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'vendor-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+const uploadVendorImage = multer({ storage: vendorStorage });
+
 const JWT_SECRET = process.env.JWT_SECRET || 'event_booking_super_secret_key_123';
 
 // Middleware to authenticate JWT token
@@ -50,7 +61,7 @@ router.get('/requests', authenticateToken, async (req, res) => {
        return res.status(200).json([]);
     }
     
-    const vendorId = vendors[0].id;
+    const vendorIds = vendors.map(v => v.id);
 
     const query = `
       SELECT bv.id, bv.service_status as status, bv.cost, 
@@ -61,11 +72,11 @@ router.get('/requests', authenticateToken, async (req, res) => {
       JOIN bookings b ON bv.booking_id = b.id
       JOIN venues v ON b.venue_id = v.id
       JOIN users u ON b.customer_id = u.id
-      WHERE bv.vendor_id = ?
+      WHERE bv.vendor_id IN (?)
       ORDER BY b.event_date ASC
     `;
     
-    const [requests] = await db.query(query, [vendorId]);
+    const [requests] = await db.query(query, [vendorIds]);
     
     // Map data for frontend
     const formattedRequests = requests.map(r => ({
@@ -110,53 +121,45 @@ router.put('/requests/:id/status', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// 3. GET VENDOR PORTFOLIO
+// 3. GET VENDOR PORTFOLIOS (ALL OWNED VENDORS)
 // ==========================================
-router.get('/portfolio', authenticateToken, async (req, res) => {
+router.get('/vendors', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const [vendors] = await db.query('SELECT * FROM vendors WHERE user_id = ?', [userId]);
-    
-    if (vendors.length === 0) {
-      // Vendor hasn't set up portfolio yet
-      return res.status(200).json({ exists: false });
-    }
-    
-    res.status(200).json({ exists: true, data: vendors[0] });
+    const [vendors] = await db.query('SELECT * FROM vendors WHERE user_id = ? ORDER BY id DESC', [userId]);
+    res.status(200).json(vendors);
   } catch (error) {
-    console.error("Error fetching portfolio:", error);
-    res.status(500).json({ message: 'Server error fetching portfolio' });
+    console.error("Error fetching vendors:", error);
+    res.status(500).json({ message: 'Server error fetching vendors' });
   }
 });
 
 // ==========================================
-// 4. UPDATE OR CREATE VENDOR PORTFOLIO
+// 4. CREATE A NEW VENDOR PORTFOLIO
 // ==========================================
-router.put('/portfolio', authenticateToken, async (req, res) => {
+router.post('/vendors', authenticateToken, uploadVendorImage.single('image_file'), async (req, res) => {
   try {
     const userId = req.user.id;
-    const { service_type, portfolio_description, starting_rate, image_url } = req.body;
-
-    const [existing] = await db.query('SELECT id FROM vendors WHERE user_id = ?', [userId]);
-
-    if (existing.length > 0) {
-      // Update
-      await db.query(
-        'UPDATE vendors SET service_type = ?, portfolio_description = ?, starting_rate = ?, image_url = ? WHERE user_id = ?',
-        [service_type, portfolio_description, starting_rate, image_url, userId]
-      );
-    } else {
-      // Create
-      await db.query(
-        'INSERT INTO vendors (user_id, service_type, portfolio_description, starting_rate, image_url) VALUES (?, ?, ?, ?, ?)',
-        [userId, service_type, portfolio_description, starting_rate, image_url]
-      );
+    const { title, service_type, portfolio_description, starting_rate, location } = req.body;
+    let image_url = req.body.image_url;
+    
+    // If a file was uploaded, use the server URL for the image
+    if (req.file) {
+      image_url = `http://localhost:5000/uploads/${req.file.filename}`;
     }
+    
+    // Fallback to a default image
+    const img = image_url || 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=600';
 
-    res.status(200).json({ message: 'Portfolio updated successfully' });
+    await db.query(
+      'INSERT INTO vendors (user_id, title, service_type, portfolio_description, starting_rate, location, image_url, rating) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [userId, title || 'Custom Vendor', service_type, portfolio_description, starting_rate, location || 'Available Nationwide', img, 0.0]
+    );
+
+    res.status(201).json({ message: 'Vendor profile created successfully' });
   } catch (error) {
-    console.error("Error saving portfolio:", error);
-    res.status(500).json({ message: 'Server error saving portfolio' });
+    console.error("Error creating vendor profile:", error);
+    res.status(500).json({ message: 'Server error creating vendor profile' });
   }
 });
 
@@ -352,7 +355,15 @@ router.post('/messages', authenticateToken, async (req, res) => {
 // ==========================================
 router.get('/history', authenticateToken, async (req, res) => {
   try {
-    const vendorId = req.user.id;
+    const userId = req.user.id;
+    const [vendors] = await db.query('SELECT id FROM vendors WHERE user_id = ?', [userId]);
+    
+    if (vendors.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    const vendorIds = vendors.map(v => v.id);
+
     const query = `
       SELECT bv.*, 
              v.title as venue_name, v.location,
@@ -362,14 +373,72 @@ router.get('/history', authenticateToken, async (req, res) => {
       JOIN bookings b ON bv.booking_id = b.id
       JOIN venues v ON b.venue_id = v.id
       JOIN users u ON b.customer_id = u.id
-      WHERE bv.vendor_id = ? AND bv.service_status != 'pending'
+      WHERE bv.vendor_id IN (?) AND bv.service_status != 'pending'
       ORDER BY b.event_date DESC
     `;
-    const [requests] = await db.query(query, [vendorId]);
+    const [requests] = await db.query(query, [vendorIds]);
     res.status(200).json(requests);
   } catch (error) {
     console.error("Error fetching vendor history:", error);
     res.status(500).json({ message: 'Server error fetching history' });
+  }
+});
+
+// ==========================================
+// 12. GET CLAIMABLE VENDORS
+// ==========================================
+router.get('/unassigned-vendors', authenticateToken, async (req, res) => {
+  try {
+    const query = 'SELECT * FROM vendors WHERE user_id IS NULL';
+    const [vendors] = await db.query(query);
+    res.status(200).json(vendors);
+  } catch (error) {
+    console.error("Error fetching unassigned vendors:", error);
+    res.status(500).json({ message: 'Server error fetching unassigned vendors' });
+  }
+});
+
+// ==========================================
+// 13. CLAIM VENDOR
+// ==========================================
+router.put('/vendors/:id/claim', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const vendorId = req.params.id;
+
+    // Ensure user doesn't already have a vendor
+    const [existing] = await db.query('SELECT id FROM vendors WHERE user_id = ?', [userId]);
+    if (existing.length > 0) return res.status(400).json({ message: 'You already have a vendor profile' });
+
+    const [vendors] = await db.query('SELECT user_id FROM vendors WHERE id = ?', [vendorId]);
+    if (vendors.length === 0) return res.status(404).json({ message: 'Vendor not found' });
+    if (vendors[0].user_id !== null) return res.status(400).json({ message: 'Vendor is already claimed by someone else' });
+
+    await db.query('UPDATE vendors SET user_id = ? WHERE id = ?', [userId, vendorId]);
+    res.status(200).json({ message: 'Vendor claimed successfully' });
+  } catch (error) {
+    console.error("Error claiming vendor:", error);
+    res.status(500).json({ message: 'Server error claiming vendor' });
+  }
+});
+
+// ==========================================
+// 14. UNCLAIM / REMOVE VENDOR
+// ==========================================
+router.put('/vendors/:id/unclaim', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const vendorId = req.params.id;
+
+    const [vendors] = await db.query('SELECT user_id FROM vendors WHERE id = ?', [vendorId]);
+    if (vendors.length === 0) return res.status(404).json({ message: 'Vendor not found' });
+    if (vendors[0].user_id !== userId) return res.status(403).json({ message: 'You do not own this vendor' });
+
+    await db.query('UPDATE vendors SET user_id = NULL WHERE id = ?', [vendorId]);
+    res.status(200).json({ message: 'Vendor removed successfully' });
+  } catch (error) {
+    console.error("Error unclaiming vendor:", error);
+    res.status(500).json({ message: 'Server error removing vendor' });
   }
 });
 
