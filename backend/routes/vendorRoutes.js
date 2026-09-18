@@ -70,7 +70,7 @@ router.get('/requests', authenticateToken, async (req, res) => {
              u.name as customerName, u.phone as customerPhone
       FROM booking_vendors bv
       JOIN bookings b ON bv.booking_id = b.id
-      JOIN venues v ON b.venue_id = v.id
+      LEFT JOIN venues v ON b.venue_id = v.id
       JOIN users u ON b.customer_id = u.id
       WHERE bv.vendor_id IN (?)
       ORDER BY b.event_date ASC
@@ -83,8 +83,8 @@ router.get('/requests', authenticateToken, async (req, res) => {
       id: r.id,
       customerName: r.customerName,
       customerPhone: r.customerPhone || 'N/A',
-      venueName: r.venueName,
-      location: r.location,
+      venueName: r.venueName || 'Independent Vendor Booking',
+      location: r.location || 'N/A',
       date: new Date(r.event_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }),
       guests: r.guest_count,
       status: r.status, // 'pending', 'accepted', 'declined', 'preparing', 'ready'
@@ -287,16 +287,30 @@ router.get('/chat-contacts', authenticateToken, async (req, res) => {
     
     const vendorId = vendors[0].id;
 
-    // Get unique customers from bookings
-    const query = `
-      SELECT DISTINCT u.id, u.name, u.role
-      FROM booking_vendors bv
-      JOIN bookings b ON bv.booking_id = b.id
-      JOIN users u ON b.customer_id = u.id
-      WHERE bv.vendor_id = ?
-    `;
-    
-    const [contacts] = await db.query(query, [vendorId]);
+    // Get all venue owners and customers, ordered by most recent message
+      const query = `
+        SELECT u.id, u.name, u.role, u.profile_picture, MAX(m.sent_at) as last_message_time, COUNT(m.id) as message_count
+        FROM users u
+        LEFT JOIN messages m ON (m.sender_id = u.id AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = u.id)
+        WHERE u.id IN (
+          SELECT b.customer_id 
+          FROM bookings b 
+          JOIN booking_vendors bv ON b.id = bv.booking_id 
+          WHERE bv.vendor_id = ?
+          
+          UNION
+          
+          SELECT sender_id FROM messages WHERE receiver_id = ?
+          
+          UNION
+          
+          SELECT receiver_id FROM messages WHERE sender_id = ?
+        )
+        GROUP BY u.id, u.name, u.role, u.profile_picture
+        ORDER BY MAX(m.sent_at) DESC, u.name ASC
+      `;
+      
+      const [contacts] = await db.query(query, [vendorUserId, vendorUserId, vendorId, vendorUserId, vendorUserId]);
     res.status(200).json(contacts);
   } catch (error) {
     console.error("Error fetching chat contacts:", error);
@@ -406,9 +420,7 @@ router.put('/vendors/:id/claim', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     const vendorId = req.params.id;
 
-    // Ensure user doesn't already have a vendor
-    const [existing] = await db.query('SELECT id FROM vendors WHERE user_id = ?', [userId]);
-    if (existing.length > 0) return res.status(400).json({ message: 'You already have a vendor profile' });
+    // Removed the 1-vendor-per-user restriction so a user can claim multiple vendor profiles.
 
     const [vendors] = await db.query('SELECT user_id FROM vendors WHERE id = ?', [vendorId]);
     if (vendors.length === 0) return res.status(404).json({ message: 'Vendor not found' });
@@ -439,6 +451,21 @@ router.put('/vendors/:id/unclaim', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error("Error unclaiming vendor:", error);
     res.status(500).json({ message: 'Server error removing vendor' });
+  }
+});
+
+// ==========================================
+// 12. GET VENDOR ANNOUNCEMENTS
+// ==========================================
+router.get('/announcements', authenticateToken, async (req, res) => {
+  try {
+    const [announcements] = await db.query(
+      "SELECT * FROM announcements WHERE target_role IN ('all', 'vendor') ORDER BY created_at DESC"
+    );
+    res.status(200).json(announcements);
+  } catch (error) {
+    console.error("Error fetching announcements:", error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

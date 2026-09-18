@@ -6,6 +6,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [pendingUsers, setPendingUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [allVenues, setAllVenues] = useState([]);
   const [stats, setStats] = useState({ totalBookings: 0, totalRevenue: 0, pendingApprovals: 0, activeUsers: 0 });
   const [settings, setSettings] = useState({ commission_rate: 10, cancellation_rules: '' });
   const [categories, setCategories] = useState([]);
@@ -42,6 +43,19 @@ export default function AdminDashboard() {
         if (response.ok) {
           const data = await response.json();
           setAllUsers(data);
+        }
+      } else if (activeTab === 'all-venues') {
+        const [resVenues, resCategories] = await Promise.all([
+          fetch('http://localhost:5000/api/admin/venues', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+          fetch('http://localhost:5000/api/admin/categories', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+        ]);
+        if (resVenues.ok) {
+          const venuesData = await resVenues.json();
+          setAllVenues(venuesData);
+        }
+        if (resCategories.ok) {
+          const categoriesData = await resCategories.json();
+          setCategories(categoriesData);
         }
       } else if (activeTab === 'settings') {
         const [resSettings, resCats, resAnn] = await Promise.all([
@@ -124,6 +138,19 @@ export default function AdminDashboard() {
       });
       if (res.ok) { setNewCategory(''); fetchDashboardData(); }
     } catch (err) {}
+  };
+
+  const handleDeleteVenue = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this venue?')) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/admin/venues/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) fetchDashboardData();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleDeleteCategory = async (id) => {
@@ -552,8 +579,58 @@ export default function AdminDashboard() {
 
         {/* Placeholders for other tabs */}
         {activeTab === 'all-venues' && (
-          <div className="bg-[#fffdf8]/95 backdrop-blur-md rounded-3xl border border-white/40 shadow-2xl p-8 flex items-center justify-center min-h-[400px]">
-            <p className="text-gray-500 font-bold capitalize">{activeTab.replace('-', ' ')} module coming soon.</p>
+          <div className="space-y-6">
+            <h2 className="text-2xl font-black text-gray-900 mb-6 flex items-center gap-2">
+              <Building className="w-6 h-6 text-indigo-600" /> Platform Venues
+            </h2>
+            <div className="bg-[#fffdf8]/95 backdrop-blur-xl rounded-3xl border border-white/40 shadow-2xl p-8">
+              {allVenues.length === 0 ? (
+                <div className="text-center py-12">
+                  <Building className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 font-medium">No venues registered on the platform yet.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-gray-500 text-sm tracking-wider uppercase">
+                        <th className="py-4 font-bold">Venue ID</th>
+                        <th className="py-4 font-bold">Title</th>
+                        <th className="py-4 font-bold">Owner</th>
+                        <th className="py-4 font-bold">Location</th>
+                        <th className="py-4 font-bold">Price / Day</th>
+                        <th className="py-4 font-bold">Capacity</th>
+                        <th className="py-4 font-bold text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {allVenues.map((venue) => (
+                        <tr key={venue.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="py-4 text-sm font-bold text-indigo-600">VNE-{venue.id.toString().padStart(3, '0')}</td>
+                          <td className="py-4 text-sm font-bold text-gray-900">{venue.title}</td>
+                          <td className="py-4 text-sm font-medium text-gray-600">
+                            <div>{venue.owner_name}</div>
+                            <div className="text-xs text-gray-400">{venue.owner_email}</div>
+                          </td>
+                          <td className="py-4 text-sm font-medium text-gray-700">{venue.location}</td>
+                          <td className="py-4 text-sm font-black text-green-600">${Number(venue.price_per_day).toLocaleString()}</td>
+                          <td className="py-4 text-sm font-bold text-gray-500">{venue.capacity}</td>
+                          <td className="py-4 text-center">
+                            <button 
+                              onClick={() => handleDeleteVenue(venue.id)} 
+                              className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                              title="Delete Venue"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </main>

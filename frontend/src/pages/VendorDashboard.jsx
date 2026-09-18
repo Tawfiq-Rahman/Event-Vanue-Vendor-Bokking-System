@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ClipboardList, Briefcase, MessageSquare, Settings, LogOut, CheckCircle, XCircle, Clock, Check, Edit3, Send } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 export default function VendorDashboard() {
   const [activeTab, setActiveTab] = useState('requests');
@@ -25,9 +25,18 @@ export default function VendorDashboard() {
   const [chatContacts, setChatContacts] = useState([]);
   const [activeChat, setActiveChat] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [activeContactTab, setActiveContactTab] = useState('customer');
   
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
@@ -80,7 +89,25 @@ export default function VendorDashboard() {
       const res = await fetch('http://localhost:5000/api/vendor/chat-contacts', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-      if (res.ok) setChatContacts(await res.json());
+      if (res.ok) {
+        const fetchedContacts = await res.json();
+        setChatContacts(prev => {
+          const merged = [...fetchedContacts];
+          if (activeChat && activeChat.id !== 'system_notices' && !merged.find(c => c.id === activeChat.id)) {
+            merged.unshift(activeChat);
+          }
+          return merged;
+        });
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/vendor/announcements', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) setAnnouncements(await res.json());
     } catch (err) { console.error(err); }
   };
 
@@ -110,6 +137,7 @@ export default function VendorDashboard() {
       if (res.ok) {
         setNewMessage('');
         fetchMessages();
+        fetchChatContacts();
       }
     } catch (err) { console.error(err); }
   };
@@ -117,11 +145,12 @@ export default function VendorDashboard() {
   useEffect(() => {
     if (activeTab === 'messages') {
       fetchChatContacts();
+      fetchAnnouncements();
     }
   }, [activeTab]);
 
   useEffect(() => {
-    if (activeChat) {
+    if (activeChat && activeChat.id !== 'system_notices') {
       fetchMessages();
       const interval = setInterval(fetchMessages, 5000); // Polling for demo
       return () => clearInterval(interval);
@@ -753,13 +782,46 @@ export default function VendorDashboard() {
             {/* Contacts Sidebar */}
             <div className="w-1/3 border-r border-gray-200 bg-gray-50/50 flex flex-col">
               <div className="p-4 border-b border-gray-200">
-                <h3 className="font-black text-gray-900">Customers</h3>
+                <h3 className="font-black text-gray-900 mb-3">Contacts</h3>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setActiveContactTab('customer')}
+                    className={`flex-1 py-2.5 px-4 text-sm font-black rounded-xl transition-all shadow-sm ${activeContactTab === 'customer' ? 'bg-indigo-600 text-white shadow-indigo-200' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    Customers
+                  </button>
+                  <button 
+                    onClick={() => setActiveContactTab('venue_owner')}
+                    className={`flex-1 py-2.5 px-4 text-sm font-black rounded-xl transition-all shadow-sm ${activeContactTab === 'venue_owner' ? 'bg-indigo-600 text-white shadow-indigo-200' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                  >
+                    Venue Owners
+                  </button>
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto">
-                {chatContacts.length === 0 ? (
-                  <p className="p-4 text-gray-500 text-sm text-center">No customers yet.</p>
+                {/* System Notices Contact */}
+                <button 
+                  onClick={() => setActiveChat({ id: 'system_notices', name: 'System Notices', role: 'admin' })}
+                  className={`w-full text-left p-4 border-b border-gray-100 flex items-center gap-3 transition-colors ${activeChat?.id === 'system_notices' ? 'bg-indigo-50 border-indigo-100' : 'hover:bg-white'}`}
+                >
+                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                    <MessageSquare className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900">System Notices</div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">ADMIN ANNOUNCEMENTS</div>
+                    {announcements.length > 0 && (
+                      <div className="text-[10px] text-indigo-600 font-bold mt-0.5">
+                        {announcements.length} {announcements.length === 1 ? 'Notice' : 'Notices'}
+                      </div>
+                    )}
+                  </div>
+                </button>
+
+                {chatContacts.filter(c => c.role === activeContactTab).length === 0 ? (
+                  <p className="p-4 text-gray-500 text-sm text-center capitalize">No {activeContactTab.replace('_', ' ')}s found.</p>
                 ) : (
-                  chatContacts.map(contact => (
+                  chatContacts.filter(c => c.role === activeContactTab).map(contact => (
                     <button 
                       key={contact.id} 
                       onClick={() => setActiveChat(contact)}
@@ -770,6 +832,12 @@ export default function VendorDashboard() {
                       </div>
                       <div>
                         <div className="font-bold text-gray-900">{contact.name}</div>
+                        <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{contact.role.replace('_', ' ')}</div>
+                        {contact.message_count > 0 && (
+                          <div className="text-[10px] text-indigo-600 font-bold mt-0.5">
+                            {contact.message_count} {contact.message_count === 1 ? 'Message' : 'Messages'}
+                          </div>
+                        )}
                       </div>
                     </button>
                   ))
@@ -783,16 +851,36 @@ export default function VendorDashboard() {
                 <>
                   <div className="p-4 border-b border-gray-200 bg-white flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
-                      {activeChat.name.charAt(0)}
+                      {activeChat.id === 'system_notices' ? <MessageSquare className="w-5 h-5" /> : activeChat.name.charAt(0)}
                     </div>
                     <div>
                       <h3 className="font-black text-gray-900">{activeChat.name}</h3>
-                      <p className="text-xs text-green-600 font-bold">Online</p>
+                      {activeChat.id !== 'system_notices' && <p className="text-xs text-green-600 font-bold">Online</p>}
                     </div>
                   </div>
                   
                   <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
-                    {messages.length === 0 ? (
+                    {activeChat.id === 'system_notices' ? (
+                      announcements.length === 0 ? (
+                        <div className="m-auto text-center">
+                          <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                          <p className="text-gray-500 font-medium">No notices from the administration.</p>
+                        </div>
+                      ) : (
+                        announcements.map((ann, idx) => (
+                          <div key={ann.id} className="bg-white p-6 rounded-2xl shadow-sm border border-indigo-50">
+                            <h4 className="font-black text-gray-900 mb-2 flex items-center gap-2">
+                              <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs">{idx + 1}</span>
+                              {ann.title}
+                            </h4>
+                            <p className="text-gray-600 text-sm whitespace-pre-wrap pl-8">{ann.message}</p>
+                            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider pl-8 mt-4">
+                              {new Date(ann.created_at).toLocaleString()}
+                            </div>
+                          </div>
+                        ))
+                      )
+                    ) : messages.length === 0 ? (
                       <div className="m-auto text-center">
                         <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-2" />
                         <p className="text-gray-500 font-medium">No messages yet. Send a hello!</p>
@@ -805,7 +893,7 @@ export default function VendorDashboard() {
                             <div className={`max-w-[70%] p-3 rounded-2xl ${isMine ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-gray-100 text-gray-900 rounded-tl-none'}`}>
                               <p className="text-sm">{msg.message}</p>
                               <p className={`text-[10px] mt-1 text-right ${isMine ? 'text-indigo-200' : 'text-gray-400'}`}>
-                                {new Date(msg.sent_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                {new Date(msg.sent_at || msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                               </p>
                             </div>
                           </div>
@@ -813,25 +901,26 @@ export default function VendorDashboard() {
                       })
                     )}
                   </div>
-                  
-                  <div className="p-4 bg-white border-t border-gray-200">
-                    <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-                      <input 
-                        type="text" 
-                        value={newMessage}
-                        onChange={e => setNewMessage(e.target.value)}
-                        placeholder="Type your message..."
-                        className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                      />
-                      <button 
-                        type="submit"
-                        disabled={!newMessage.trim()}
-                        className="p-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all flex-shrink-0"
-                      >
-                        <Send className="w-5 h-5" />
-                      </button>
-                    </form>
-                  </div>
+                  {activeChat.id !== 'system_notices' && (
+                    <div className="p-4 bg-white border-t border-gray-200">
+                      <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                        <input 
+                          type="text" 
+                          value={newMessage}
+                          onChange={e => setNewMessage(e.target.value)}
+                          placeholder="Type your message..."
+                          className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <button 
+                          type="submit"
+                          disabled={!newMessage.trim()}
+                          className="p-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all flex-shrink-0"
+                        >
+                          <Send className="w-5 h-5" />
+                        </button>
+                      </form>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="m-auto text-center">

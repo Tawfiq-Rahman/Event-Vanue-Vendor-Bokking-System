@@ -1,15 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Star, MapPin, ArrowLeft } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Star, MapPin, ArrowLeft, X, SearchX } from 'lucide-react';
 
 export default function Venues() {
   const [venues, setVenues] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchParams] = useSearchParams();
+
+  const searchDate = searchParams.get('date');
+  const searchCapacity = searchParams.get('capacity');
+  const searchBudget = searchParams.get('budget');
+  const hasFilters = searchDate || searchCapacity || searchBudget;
 
   useEffect(() => {
     const fetchVenues = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/venues/public');
+        setLoading(true);
+        const query = new URLSearchParams();
+        if (searchDate) query.append('date', searchDate);
+        if (searchCapacity) query.append('capacity', searchCapacity);
+        if (searchBudget) query.append('budget', searchBudget);
+
+        const res = await fetch(`http://localhost:5000/api/venues/public?${query.toString()}`);
         const data = await res.json();
         setVenues(data);
         setLoading(false);
@@ -19,7 +31,7 @@ export default function Venues() {
       }
     };
     fetchVenues();
-  }, []);
+  }, [searchDate, searchCapacity, searchBudget]);
 
   return (
     <div className="min-h-screen bg-gray-50 pt-24 pb-16">
@@ -27,14 +39,52 @@ export default function Venues() {
         <Link to="/" className="inline-flex items-center text-indigo-600 font-bold hover:text-indigo-800 transition-colors mb-8">
           <ArrowLeft className="w-5 h-5 mr-2" /> Back to Home
         </Link>
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-4">Explore All Spaces</h1>
-          <p className="text-xl text-gray-500">Discover the perfect venue for your next unforgettable event.</p>
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-4">
+            {hasFilters ? 'Search Results' : 'Explore All Spaces'}
+          </h1>
+          <p className="text-xl text-gray-500">
+            {hasFilters ? 'We found these venues based on your search criteria.' : 'Discover the perfect venue for your next unforgettable event.'}
+          </p>
         </div>
+
+        {hasFilters && (
+          <div className="flex flex-wrap justify-center gap-3 mb-12">
+            {searchDate && (
+              <span className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-full text-sm font-bold border border-indigo-100 shadow-sm">
+                Date: {searchDate}
+              </span>
+            )}
+            {searchCapacity && (
+              <span className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-full text-sm font-bold border border-indigo-100 shadow-sm">
+                Guests: {searchCapacity}+
+              </span>
+            )}
+            {searchBudget && (
+              <span className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-full text-sm font-bold border border-indigo-100 shadow-sm">
+                Budget: {searchBudget === 'low' ? 'Under $1,000' : searchBudget === 'med' ? '$1,000 - $5,000' : '$5,000+'}
+              </span>
+            )}
+            <Link to="/venues" className="px-4 py-2 bg-white text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full text-sm font-bold border border-gray-200 transition-colors flex items-center shadow-sm cursor-pointer">
+              <X className="w-4 h-4 mr-1" /> Clear Filters
+            </Link>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex justify-center items-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+          </div>
+        ) : venues.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="bg-white p-6 rounded-full shadow-sm mb-6">
+              <SearchX className="w-12 h-12 text-gray-400" />
+            </div>
+            <h3 className="text-2xl font-black text-gray-900 mb-2">No venues found</h3>
+            <p className="text-gray-500 mb-8 max-w-md">We couldn't find any venues matching your exact search criteria. Try adjusting your filters.</p>
+            <Link to="/venues" className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-sm hover:bg-indigo-700 transition-colors">
+              View All Venues
+            </Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

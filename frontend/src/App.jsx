@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, CalendarDays, Users, Wallet, Star, MapPin } from 'lucide-react';
 import Navbar from './component/Navbar';
 import Login from './pages/logIn';
@@ -17,6 +17,20 @@ import Venues from './pages/Venues'; // NEW LINE
 
 function Home() {
   const [featuredVenues, setFeaturedVenues] = useState([]);
+  const navigate = useNavigate();
+
+  const [searchDate, setSearchDate] = useState('');
+  const [searchCapacity, setSearchCapacity] = useState('');
+  const [searchBudget, setSearchBudget] = useState('');
+
+  const handleSearch = () => {
+    const params = new URLSearchParams();
+    if (searchDate) params.append('date', searchDate);
+    if (searchCapacity) params.append('capacity', searchCapacity);
+    if (searchBudget) params.append('budget', searchBudget);
+    
+    navigate(`/venues?${params.toString()}`);
+  };
 
   useEffect(() => {
     const fetchVenues = async () => {
@@ -63,10 +77,13 @@ function Home() {
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Event Date</span>
                 {/* Fixed the mm/dd/yyyy issue with onFocus trick */}
                 <input 
-                  type="text" 
+                  type={searchDate ? "date" : "text"}
+                  value={searchDate}
+                  onChange={(e) => setSearchDate(e.target.value)}
                   placeholder="Select a date"
-                  onFocus={(e) => (e.target.type = "date")}
-                  onBlur={(e) => (e.target.type = e.target.value ? "date" : "text")}
+                  onFocus={(e) => { e.target.type = "date"; e.target.showPicker && e.target.showPicker(); }}
+                  onBlur={(e) => { if (!e.target.value) e.target.type = "text"; }}
+                  onClick={(e) => { e.target.type = "date"; e.target.showPicker && e.target.showPicker(); }}
                   className="bg-transparent w-full outline-none text-sm text-gray-900 font-medium cursor-pointer" 
                 />
               </div>
@@ -76,7 +93,13 @@ function Home() {
               <Users className="w-5 h-5 text-indigo-500 mr-3 shrink-0" />
               <div className="flex flex-col text-left w-full">
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Guests</span>
-                <input type="number" placeholder="Add capacity" className="bg-transparent w-full outline-none text-sm text-gray-900 font-medium" />
+                <input 
+                  type="number" 
+                  value={searchCapacity}
+                  onChange={(e) => setSearchCapacity(e.target.value)}
+                  placeholder="Add capacity" 
+                  className="bg-transparent w-full outline-none text-sm text-gray-900 font-medium" 
+                />
               </div>
             </div>
             
@@ -84,7 +107,11 @@ function Home() {
               <Wallet className="w-5 h-5 text-indigo-500 mr-3 shrink-0" />
               <div className="flex flex-col text-left w-full">
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Budget</span>
-                <select className="bg-transparent w-full outline-none text-sm text-gray-900 font-medium appearance-none cursor-pointer">
+                <select 
+                  value={searchBudget}
+                  onChange={(e) => setSearchBudget(e.target.value)}
+                  className="bg-transparent w-full outline-none text-sm text-gray-900 font-medium appearance-none cursor-pointer"
+                >
                   <option value="">Any Budget</option>
                   <option value="low">Under $1,000</option>
                   <option value="med">$1,000 - $5,000</option>
@@ -93,7 +120,10 @@ function Home() {
               </div>
             </div>
             
-            <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 md:py-0 md:h-14 rounded-xl md:rounded-full font-bold transition-all shadow-lg shadow-indigo-200 flex items-center justify-center min-w-[140px]">
+            <button 
+              onClick={handleSearch}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 md:py-0 md:h-14 rounded-xl md:rounded-full font-bold transition-all shadow-lg shadow-indigo-200 flex items-center justify-center min-w-[140px]"
+            >
               <Search className="w-5 h-5 mr-2" />
               Search
             </button>

@@ -86,8 +86,9 @@ export default function Vendor() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {filteredVendors.map((vendor) => {
               const Icon = getIconForType(vendor.service_type);
-              return (
-                <Link to={`/vendors/${vendor.id}`} key={vendor.id} className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 group cursor-pointer flex flex-col">
+                const slug = vendor.title.toLowerCase().replace(/ & /g, '-and-').replace(/ /g, '-');
+                return (
+                <Link to={`/vendors/${slug}`} key={vendor.id} className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 group cursor-pointer flex flex-col">
                   <div className="h-52 overflow-hidden relative bg-gray-100">
                     <img src={vendor.image_url || 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=600'} alt={vendor.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                     <div className="absolute top-4 right-4 bg-white/95 backdrop-blur px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm text-gray-900">

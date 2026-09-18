@@ -373,16 +373,30 @@ router.get('/chat-contacts', authenticateToken, async (req, res) => {
   try {
     const ownerId = req.user.id;
 
-    // Venue chat contacts are customers who have booked any of their venues
-    const query = `
-      SELECT DISTINCT u.id, u.name, u.role
-      FROM bookings b
-      JOIN venues v ON b.venue_id = v.id
-      JOIN users u ON b.customer_id = u.id
-      WHERE v.owner_id = ?
-    `;
-    
-    const [contacts] = await db.query(query, [ownerId]);
+    // Venue owners can chat with all customers and vendors, ordered by most recent message
+      const query = `
+        SELECT u.id, u.name, u.role, u.profile_picture, MAX(m.sent_at) as last_message_time, COUNT(m.id) as message_count
+        FROM users u
+        LEFT JOIN messages m ON (m.sender_id = u.id AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = u.id)
+        WHERE u.id IN (
+          SELECT b.customer_id 
+          FROM bookings b 
+          JOIN venues v ON b.venue_id = v.id 
+          WHERE v.owner_id = ?
+          
+          UNION
+          
+          SELECT sender_id FROM messages WHERE receiver_id = ?
+          
+          UNION
+          
+          SELECT receiver_id FROM messages WHERE sender_id = ?
+        )
+        GROUP BY u.id, u.name, u.role, u.profile_picture
+        ORDER BY MAX(m.sent_at) DESC, u.name ASC
+      `;
+      
+      const [contacts] = await db.query(query, [ownerId, ownerId, ownerId, ownerId, ownerId]);
     res.status(200).json(contacts);
   } catch (error) {
     console.error("Error fetching chat contacts:", error);
@@ -488,6 +502,21 @@ router.put('/venues/:id/unclaim', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error("Error unclaiming venue:", error);
     res.status(500).json({ message: 'Server error removing venue' });
+  }
+});
+
+// ==========================================
+// 12. GET VENUE OWNER ANNOUNCEMENTS
+// ==========================================
+router.get('/announcements', authenticateToken, async (req, res) => {
+  try {
+    const [announcements] = await db.query(
+      "SELECT * FROM announcements WHERE target_role IN ('all', 'venue_owner') ORDER BY created_at DESC"
+    );
+    res.status(200).json(announcements);
+  } catch (error) {
+    console.error("Error fetching announcements:", error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

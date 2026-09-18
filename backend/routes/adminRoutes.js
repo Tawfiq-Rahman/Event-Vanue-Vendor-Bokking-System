@@ -157,6 +157,32 @@ router.delete('/categories/:id', async (req, res) => {
 });
 
 // ==========================================
+// 6a. VENUES
+// ==========================================
+router.get('/venues', async (req, res) => {
+  try {
+    const [venues] = await db.query(`
+      SELECT v.*, u.name as owner_name, u.email as owner_email 
+      FROM venues v
+      LEFT JOIN users u ON v.owner_id = u.id
+      ORDER BY v.created_at DESC
+    `);
+    res.json(venues);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.delete('/venues/:id', async (req, res) => {
+  try {
+    await db.query("DELETE FROM venues WHERE id = ?", [req.params.id]);
+    res.json({ message: 'Venue removed' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ==========================================
 // 7. ANNOUNCEMENTS
 // ==========================================
 router.post('/announcements', async (req, res) => {
@@ -183,8 +209,20 @@ router.get('/announcements', async (req, res) => {
 // ==========================================
 router.get('/report/monthly', async (req, res) => {
   try {
-    const [bookings] = await db.query("SELECT COUNT(*) as count, SUM(total_amount) as revenue FROM bookings WHERE MONTH(created_at) = MONTH(CURRENT_DATE())");
+    const [stats] = await db.query("SELECT COUNT(*) as count, SUM(total_amount) as revenue FROM bookings WHERE MONTH(created_at) = MONTH(CURRENT_DATE())");
     const [users] = await db.query("SELECT COUNT(*) as count FROM users WHERE MONTH(created_at) = MONTH(CURRENT_DATE())");
+    
+    const [bookingDetails] = await db.query(`
+      SELECT b.id, b.total_amount, b.booking_status, DATE_FORMAT(b.event_date, '%b %d, %Y') as event_date,
+             u.name as customer_name,
+             COALESCE(v.title, 'Independent Vendor Booking') as venue_name,
+             (SELECT GROUP_CONCAT(ven.title SEPARATOR ', ') FROM booking_vendors bv JOIN vendors ven ON bv.vendor_id = ven.id WHERE bv.booking_id = b.id) as vendor_names
+      FROM bookings b
+      JOIN users u ON b.customer_id = u.id
+      LEFT JOIN venues v ON b.venue_id = v.id
+      WHERE MONTH(b.created_at) = MONTH(CURRENT_DATE())
+      ORDER BY b.created_at DESC
+    `);
     
     const doc = new PDFDocument({ margin: 50 });
     
@@ -203,10 +241,35 @@ router.get('/report/monthly', async (req, res) => {
     doc.moveDown(0.5);
     
     doc.fontSize(12).font('Helvetica')
-       .text(`New Bookings This Month: ${bookings[0].count || 0}`)
-       .text(`Total Revenue This Month: $${bookings[0].revenue || '0.00'}`)
+       .text(`New Bookings This Month: ${stats[0].count || 0}`)
+       .text(`Total Revenue This Month: $${stats[0].revenue || '0.00'}`)
        .text(`New Users Registered This Month: ${users[0].count || 0}`);
        
+    doc.moveDown(2);
+    
+    doc.fontSize(16).font('Helvetica-Bold').text('Booking Details:');
+    doc.moveDown(0.5);
+    
+    if (bookingDetails.length === 0) {
+      doc.fontSize(12).font('Helvetica').text('No bookings found for this month.');
+    } else {
+      bookingDetails.forEach(b => {
+        doc.fontSize(12).font('Helvetica-Bold').text(`Booking ID: BKG-${b.id.toString().padStart(3, '0')}`);
+        doc.font('Helvetica')
+           .text(`Customer: ${b.customer_name}`)
+           .text(`Event Date: ${b.event_date}`)
+           .text(`Venue: ${b.venue_name}`);
+        if (b.vendor_names) {
+          doc.text(`Vendors: ${b.vendor_names}`);
+        } else {
+          doc.text(`Vendors: None`);
+        }
+        doc.text(`Total Cost: $${b.total_amount}`)
+           .text(`Status: ${b.booking_status.toUpperCase()}`);
+        doc.moveDown(1);
+      });
+    }
+
     doc.moveDown(2);
     doc.fontSize(10).fillColor('gray').text('This is an automatically generated system report.', { align: 'center' });
     
