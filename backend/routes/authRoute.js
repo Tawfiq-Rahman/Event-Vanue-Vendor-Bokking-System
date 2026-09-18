@@ -10,10 +10,14 @@ const JWT_SECRET = process.env.JWT_SECRET || 'event_booking_super_secret_key_123
 // 1. REGISTER ROUTE
 // ==========================================
 router.post('/register', async (req, res) => {
-  const { name, email, password, role, phone } = req.body;
+  const { name, email, password, role, phone, government_id, business_license_id } = req.body;
   
   if (!name || !email || !password || !role) {
     return res.status(400).json({ message: 'Please provide all required fields.' });
+  }
+
+  if ((role === 'vendor' || role === 'venue_owner') && (!government_id || !business_license_id)) {
+    return res.status(400).json({ message: 'Government ID and Business License ID are required for vendors and venue owners.' });
   }
 
   try {
@@ -25,21 +29,29 @@ router.post('/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Customers are approved instantly; Venue Owners & Vendors must wait for Admin
-    const initialStatus = role === 'customer' ? 'approved' : 'pending';
+    // ALL roles must wait for Admin approval
+    const initialStatus = 'pending';
 
     // Insert new user into MySQL
     const [result] = await db.query(
-      'INSERT INTO users (name, email, password, role, status, phone) VALUES (?, ?, ?, ?, ?, ?)',
-      [name, email, hashedPassword, role, initialStatus, phone || '']
+      'INSERT INTO users (name, email, password, role, status, phone, government_id, business_license_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, email, hashedPassword, role, initialStatus, phone || '', government_id || null, business_license_id || null]
     );
 
-    // If registered as a vendor, create an initial vendor profile record
+    // If registered as a vendor, randomly assign one unique available vendor
     if (role === 'vendor') {
-      await db.query(
-        'INSERT INTO vendors (user_id, service_type, portfolio_description, starting_rate) VALUES (?, ?, ?, ?)',
-        [result.insertId, 'catering', 'Default portfolio', 0.00]
-      );
+      const [availableVendors] = await db.query('SELECT id FROM vendors WHERE user_id IS NULL ORDER BY RAND() LIMIT 1');
+      if (availableVendors.length > 0) {
+        await db.query('UPDATE vendors SET user_id = ? WHERE id = ?', [result.insertId, availableVendors[0].id]);
+      }
+    }
+
+    // If registered as a venue_owner, randomly assign one unique available venue
+    if (role === 'venue_owner') {
+      const [availableVenues] = await db.query('SELECT id FROM venues WHERE owner_id IS NULL ORDER BY RAND() LIMIT 1');
+      if (availableVenues.length > 0) {
+        await db.query('UPDATE venues SET owner_id = ? WHERE id = ?', [result.insertId, availableVenues[0].id]);
+      }
     }
 
     res.status(201).json({

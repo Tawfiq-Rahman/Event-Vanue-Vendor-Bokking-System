@@ -1,21 +1,45 @@
-Venue Owner : 
-
-1. Rafiq Hasan
-Email: rafiq@gmail.com
-Password: rafiq#123
-
-
 Customer : 
 
-1. Tawfiq Rahman
-Email: tawfiq@gmail.com
-Password: tawfiq#123
+1. John Bolder
+Email: jh@gmail.com
+Password: jh#123
+
+2. Tawfiq Rahman
+Email: ta@gmail.com
+Password: ta#123
+
+3. Hamim Rahman
+Email: ha@gmail.com
+Password: ha#123
+
+
+Venue Owner : 
+
+1. Rafael Simiouni
+Email: ra@gmail.com
+Password: ra#123
+
+2. Tony Stark
+Email: to@gmail.com
+Password: to#123
+
+3. Steve Rogger
+Email: st@gmail.com
+Password: st#123
 
 
 Vendor : 
 
-1. Hamim Rahman
-Email: hamim@gmail.com
-Password: hamim#123
+1. Pisiuke Batler
+Email: pi@gmail.com
+Password: pi#123
+
+2. lumanof Fring
+Email: lu@gmail.com
+Password: lu#123
+
+3. Neymar Junior
+Email: ne@gmail.com
+Password: ne#123    
 
 

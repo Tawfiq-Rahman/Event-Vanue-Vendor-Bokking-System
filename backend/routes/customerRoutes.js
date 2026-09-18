@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../db'); 
 const multer = require('multer');
 const path = require('path');
+const PDFDocument = require('pdfkit');
 
 // Configure Multer for local profile picture uploads
 const storage = multer.diskStorage({
@@ -33,45 +34,6 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
-
-// ==========================================
-// 1. GET ALL BOOKINGS FOR CUSTOMER
-// ==========================================
-router.get('/bookings', authenticateToken, async (req, res) => {
-  try {
-    const customerId = req.user.id;
-    
-    // Join bookings with venues to get venue title
-    const query = `
-      SELECT b.id, b.event_date, b.booking_status as status, b.total_amount as total, b.advance_paid as paid, v.title as venueName 
-      FROM bookings b 
-      JOIN venues v ON b.venue_id = v.id 
-      WHERE b.customer_id = ?
-      ORDER BY b.event_date DESC
-    `;
-    
-    const [bookings] = await db.query(query, [customerId]);
-    
-    // Map the database rows to the format expected by the frontend
-    const formattedBookings = bookings.map(b => {
-      return {
-        id: `BKG-${b.id.toString().padStart(3, '0')}`, // Example: BKG-001
-        rawId: b.id, // Keep the real ID for API calls
-        venueName: b.venueName,
-        // Format date string from DB
-        date: new Date(b.event_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }),
-        status: b.status.charAt(0).toUpperCase() + b.status.slice(1), // Capitalize
-        total: `$${Number(b.total).toLocaleString()}`,
-        paid: `$${Number(b.paid).toLocaleString()}`
-      };
-    });
-
-    res.status(200).json(formattedBookings);
-  } catch (error) {
-    console.error("Error fetching customer bookings:", error);
-    res.status(500).json({ message: 'Server error while fetching bookings' });
-  }
-});
 
 // ==========================================
 // 2. PAY ADVANCE FOR A BOOKING
@@ -103,6 +65,37 @@ router.put('/bookings/:id/pay', authenticateToken, async (req, res) => {
     res.status(200).json({ message: 'Payment successful! Booking confirmed.' });
   } catch (error) {
     console.error("Error paying advance:", error);
+    res.status(500).json({ message: 'Server error during payment' });
+  }
+});
+
+// ==========================================
+// 2b. PAY FULL REMAINING BALANCE
+// ==========================================
+router.put('/bookings/:id/pay-full', authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const bookingId = req.params.id;
+
+    const [bookings] = await db.query(
+      'SELECT total_amount FROM bookings WHERE id = ? AND customer_id = ? AND booking_status = "confirmed"', 
+      [bookingId, customerId]
+    );
+
+    if (bookings.length === 0) {
+      return res.status(404).json({ message: 'Confirmed booking not found.' });
+    }
+
+    const totalAmount = bookings[0].total_amount;
+
+    await db.query(
+      'UPDATE bookings SET advance_paid = ?, booking_status = "completed" WHERE id = ?',
+      [totalAmount, bookingId]
+    );
+
+    res.status(200).json({ message: 'Full payment successful!' });
+  } catch (error) {
+    console.error("Error paying full balance:", error);
     res.status(500).json({ message: 'Server error during payment' });
   }
 });
@@ -219,6 +212,409 @@ router.put('/password', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error("Error updating password:", error);
     res.status(500).json({ message: 'Server error during password update' });
+  }
+});
+
+// ==========================================
+// 6. SEARCH VENUES
+// ==========================================
+router.get('/venues/search', authenticateToken, async (req, res) => {
+  try {
+    const { date, capacity, maxBudget } = req.query;
+    let query = 'SELECT v.*, u.name as owner_name FROM venues v JOIN users u ON v.owner_id = u.id WHERE 1=1';
+    const queryParams = [];
+
+    if (capacity) {
+      query += ' AND v.capacity >= ?';
+      queryParams.push(Number(capacity));
+    }
+    if (maxBudget) {
+      query += ' AND v.price_per_day <= ?';
+      queryParams.push(Number(maxBudget));
+    }
+    // Simple availability check: Venue is not booked on that date
+    if (date) {
+      query += ' AND v.id NOT IN (SELECT venue_id FROM bookings WHERE event_date = ? AND booking_status != "cancelled")';
+      queryParams.push(date);
+    }
+
+    const [venues] = await db.query(query, queryParams);
+    res.json(venues);
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({ message: 'Server error during search' });
+  }
+});
+
+// ==========================================
+// 7. GET VENDORS
+// ==========================================
+router.get('/vendors', authenticateToken, async (req, res) => {
+  try {
+    const [vendors] = await db.query('SELECT v.*, u.name as vendor_name FROM vendors v JOIN users u ON v.user_id = u.id');
+    res.json(vendors);
+  } catch (error) {
+    console.error('Vendor fetch error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ==========================================
+// 8. CREATE BOOKING
+// ==========================================
+router.post('/bookings', authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const { venue_id, event_date, guest_count, total_amount, vendor_ids } = req.body;
+
+    // Check if the user already has a booking on this date
+    const [existingBookings] = await db.query(
+      'SELECT id FROM bookings WHERE customer_id = ? AND event_date = ? AND booking_status != "cancelled" AND booking_status != "rejected"',
+      [customerId, event_date]
+    );
+
+    if (existingBookings.length > 0) {
+      return res.status(400).json({ message: 'You already have a booking on this date!' });
+    }
+
+    const initialStatus = venue_id ? 'pending' : 'confirmed';
+    const [result] = await db.query(
+      'INSERT INTO bookings (customer_id, venue_id, event_date, guest_count, total_amount, booking_status) VALUES (?, ?, ?, ?, ?, ?)',
+      [customerId, venue_id || null, event_date, guest_count, total_amount, initialStatus]
+    );
+
+    const bookingId = result.insertId;
+
+    if (vendor_ids && vendor_ids.length > 0) {
+      for (const v of vendor_ids) {
+        await db.query(
+          'INSERT INTO booking_vendors (booking_id, vendor_id, cost) VALUES (?, ?, ?)',
+          [bookingId, v.id, v.cost]
+        );
+      }
+    }
+
+    res.status(201).json({ message: 'Booking created successfully!', bookingId });
+  } catch (error) {
+    console.error('Booking error:', error);
+    res.status(500).json({ message: 'Server error during booking' });
+  }
+});
+
+// ==========================================
+// 9. SUBMIT REVIEW
+// ==========================================
+router.post('/reviews', authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const { venue_id, vendor_id, rating, comment } = req.body;
+    
+    await db.query(
+      'INSERT INTO reviews (customer_id, venue_id, vendor_id, rating, comment) VALUES (?, ?, ?, ?, ?)',
+      [customerId, venue_id || null, vendor_id || null, rating, comment]
+    );
+
+    res.json({ message: 'Review submitted successfully!' });
+  } catch (error) {
+    console.error('Review error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ==========================================
+// 10. CHAT MESSAGES
+// ==========================================
+router.get('/messages/:partnerId', authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const partnerId = req.params.partnerId;
+
+    const [messages] = await db.query(
+      'SELECT * FROM messages WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?) ORDER BY sent_at ASC',
+      [customerId, partnerId, partnerId, customerId]
+    );
+    res.json(messages);
+  } catch (error) {
+    console.error('Message error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.post('/messages', authenticateToken, async (req, res) => {
+  try {
+    const senderId = req.user.id;
+    const { receiver_id, message } = req.body;
+
+    await db.query(
+      'INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)',
+      [senderId, receiver_id, message]
+    );
+    res.json({ message: 'Message sent' });
+  } catch (error) {
+    console.error('Message send error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ==========================================
+// 11. GET CHAT CONTACTS (Owners & Vendors involved in bookings)
+// ==========================================
+router.get('/chat-contacts', authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    
+    // Get unique owners and vendors involved in bookings, ordered by most recent message
+      const query = `
+        SELECT u.id, u.name, u.role, u.profile_picture, MAX(m.sent_at) as last_message_time, COUNT(m.id) as message_count
+        FROM users u
+        LEFT JOIN messages m ON (m.sender_id = u.id AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = u.id)
+        WHERE u.id IN (
+          SELECT v.owner_id 
+          FROM bookings b 
+          JOIN venues v ON b.venue_id = v.id 
+          WHERE b.customer_id = ?
+          
+          UNION
+          
+          SELECT ven.user_id 
+          FROM bookings b 
+          JOIN booking_vendors bv ON b.id = bv.booking_id 
+          JOIN vendors ven ON bv.vendor_id = ven.id 
+          WHERE b.customer_id = ?
+
+          UNION
+
+          SELECT sender_id FROM messages WHERE receiver_id = ?
+
+          UNION
+
+          SELECT receiver_id FROM messages WHERE sender_id = ?
+        )
+        GROUP BY u.id, u.name, u.role, u.profile_picture
+        ORDER BY MAX(m.sent_at) DESC, u.name ASC
+      `;
+      
+      const [contacts] = await db.query(query, [customerId, customerId, customerId, customerId, customerId, customerId]);
+    
+    res.json(contacts);
+  } catch (error) {
+    console.error('Chat contacts error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ==========================================
+// 12. GENERATE BOOKING INVOICE (PDF)
+// ==========================================
+router.get('/bookings/:id/invoice', authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const bookingId = req.params.id;
+
+    const [bookings] = await db.query(`
+      SELECT b.*, v.title as venue_name, v.price_per_day, u.name as customer_name, u.email 
+      FROM bookings b 
+      LEFT JOIN venues v ON b.venue_id = v.id 
+      JOIN users u ON b.customer_id = u.id
+      WHERE b.id = ? AND b.customer_id = ?
+    `, [bookingId, customerId]);
+
+    if (bookings.length === 0) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    const booking = bookings[0];
+
+    const [vendors] = await db.query(`
+      SELECT bv.cost, ven.service_type, u.name as vendor_name 
+      FROM booking_vendors bv
+      JOIN vendors ven ON bv.vendor_id = ven.id
+      JOIN users u ON ven.user_id = u.id
+      WHERE bv.booking_id = ?
+    `, [bookingId]);
+
+    const doc = new PDFDocument({ margin: 50 });
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="invoice_BKG-${bookingId.toString().padStart(3, '0')}.pdf"`);
+    
+    doc.pipe(res);
+    
+    doc.fontSize(25).font('Helvetica-Bold').text('EventHub Invoice', { align: 'center' });
+    doc.moveDown();
+    
+    doc.fontSize(12).font('Helvetica-Bold').text(`Invoice #BKG-${bookingId.toString().padStart(3, '0')}`);
+    doc.font('Helvetica').text(`Date: ${new Date().toLocaleDateString()}`);
+    doc.moveDown();
+    
+    doc.font('Helvetica-Bold').text('Billed To:');
+    doc.font('Helvetica').text(booking.customer_name);
+    doc.text(booking.email);
+    doc.moveDown();
+    
+    doc.font('Helvetica-Bold').text('Booking Details:');
+    if (booking.venue_id) {
+      doc.font('Helvetica').text(`Venue: ${booking.venue_name}`);
+    } else {
+      doc.font('Helvetica').text(`Vendor: ${booking.venue_name}`);
+    }
+    doc.text(`Event Date: ${new Date(booking.event_date).toLocaleDateString()}`);
+    doc.text(`Guests: ${booking.guest_count}`);
+    doc.text(`Status: ${booking.booking_status.toUpperCase()}`);
+    doc.moveDown();
+    
+    doc.font('Helvetica-Bold').text('Charges:', { underline: true });
+    doc.moveDown(0.5);
+    
+    if (booking.venue_name) {
+      doc.font('Helvetica').text(`Venue Rental (${booking.venue_name}): $${booking.price_per_day}`);
+    }
+    
+    let totalVendors = 0;
+    vendors.forEach(v => {
+      doc.text(`${v.service_type.toUpperCase()} - ${v.vendor_name}: $${v.cost}`);
+      totalVendors += Number(v.cost);
+    });
+    
+    doc.moveDown();
+    doc.font('Helvetica-Bold').text(`Total Amount: $${booking.total_amount}`);
+    doc.text(`Advance Paid: $${booking.advance_paid}`);
+    doc.text(`Balance Due: $${(booking.total_amount - booking.advance_paid).toFixed(2)}`);
+    
+    doc.moveDown(4);
+    doc.fontSize(10).fillColor('gray').text('Thank you for choosing EventHub!', { align: 'center' });
+    
+    doc.end();
+  } catch (error) {
+    console.error("PDF Error:", error);
+    res.status(500).json({ message: 'Error generating invoice' });
+  }
+});
+
+// ==========================================
+// 6. GET CUSTOMER BOOKINGS (Upcoming/Actionable)
+// ==========================================
+router.get('/bookings', authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const query = `
+      SELECT b.id as rawId, CONCAT('BKG-', LPAD(b.id, 3, '0')) as id, 
+             DATE_FORMAT(b.event_date, '%b %d, %Y') as date, 
+             b.booking_status as status, 
+             CONCAT('$', FORMAT(b.total_amount, 0)) as total, 
+             CONCAT('$', FORMAT(b.advance_paid, 0)) as paid,
+             COALESCE(
+               v.title, 
+               (SELECT ven.title FROM booking_vendors bv JOIN vendors ven ON bv.vendor_id = ven.id WHERE bv.booking_id = b.id LIMIT 1),
+               'Independent Vendor Booking'
+             ) as venueName
+      FROM bookings b
+      LEFT JOIN venues v ON b.venue_id = v.id
+      WHERE b.customer_id = ?
+        AND (b.booking_status NOT IN ('rejected', 'cancelled', 'completed') 
+             OR (b.booking_status IN ('rejected', 'cancelled') AND b.customer_seen = 0))
+      ORDER BY b.event_date DESC
+    `;
+    const [bookings] = await db.query(query, [customerId]);
+    res.status(200).json(bookings);
+  } catch (error) {
+    console.error("Error fetching customer bookings:", error);
+    res.status(500).json({ message: 'Server error fetching bookings' });
+  }
+});
+
+// ==========================================
+// 7. GET CUSTOMER HISTORY (Completed/Cancelled)
+// ==========================================
+router.get('/history', authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const query = `
+      SELECT b.id as rawId, CONCAT('BKG-', LPAD(b.id, 3, '0')) as id, 
+             DATE_FORMAT(b.event_date, '%b %d, %Y') as date, 
+             b.booking_status as status, 
+             CONCAT('$', FORMAT(b.total_amount, 0)) as total, 
+             CONCAT('$', FORMAT(b.advance_paid, 0)) as paid,
+             COALESCE(
+               v.title, 
+               (SELECT ven.title FROM booking_vendors bv JOIN vendors ven ON bv.vendor_id = ven.id WHERE bv.booking_id = b.id LIMIT 1),
+               'Independent Vendor Booking'
+             ) as venueName
+      FROM bookings b
+      LEFT JOIN venues v ON b.venue_id = v.id
+      WHERE b.customer_id = ?
+        AND (b.booking_status = 'completed' 
+             OR (b.booking_status IN ('rejected', 'cancelled') AND b.customer_seen = 1))
+      ORDER BY b.event_date DESC
+    `;
+    const [bookings] = await db.query(query, [customerId]);
+    res.status(200).json(bookings);
+  } catch (error) {
+    console.error("Error fetching customer history:", error);
+    res.status(500).json({ message: 'Server error fetching history' });
+  }
+});
+
+// ==========================================
+// 8. MARK CUSTOMER BOOKINGS AS SEEN
+// ==========================================
+router.put('/bookings/mark-seen', authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    await db.query(`
+      UPDATE bookings 
+      SET customer_seen = 1 
+      WHERE customer_id = ? AND booking_status IN ('rejected', 'cancelled') AND customer_seen = 0
+    `, [customerId]);
+    res.status(200).json({ message: 'Marked as seen' });
+  } catch (error) {
+    console.error("Error marking seen:", error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ==========================================
+// 9. GET CUSTOMER STATEMENTS
+// ==========================================
+router.get('/statements', authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const query = `
+      SELECT b.id as rawId, CONCAT('BKG-', LPAD(b.id, 3, '0')) as bookingId, 
+             DATE_FORMAT(b.created_at, '%b %d, %Y') as date, 
+             b.booking_status as status, 
+             b.total_amount, 
+             b.advance_paid,
+             COALESCE(
+               v.title, 
+               (SELECT ven.title FROM booking_vendors bv JOIN vendors ven ON bv.vendor_id = ven.id WHERE bv.booking_id = b.id LIMIT 1),
+               'Independent Vendor Booking'
+             ) as venueName
+      FROM bookings b
+      LEFT JOIN venues v ON b.venue_id = v.id
+      WHERE b.customer_id = ? AND b.advance_paid > 0
+      ORDER BY b.id DESC
+    `;
+    const [statements] = await db.query(query, [customerId]);
+    res.status(200).json(statements);
+  } catch (error) {
+    console.error("Error fetching statements:", error);
+    res.status(500).json({ message: 'Server error fetching statements' });
+  }
+});
+
+// ==========================================
+// 10. GET CUSTOMER ANNOUNCEMENTS
+// ==========================================
+router.get('/announcements', authenticateToken, async (req, res) => {
+  try {
+    const [announcements] = await db.query(
+      "SELECT * FROM announcements WHERE target_role IN ('all', 'customer') ORDER BY created_at DESC"
+    );
+    res.status(200).json(announcements);
+  } catch (error) {
+    console.error("Error fetching announcements:", error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

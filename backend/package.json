@@ -19,6 +19,7 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.10.0",
     "multer": "^2.4.0",
-    "mysql2": "^3.24.4"
+    "mysql2": "^3.24.4",
+    "pdfkit": "^0.20.2"
   }
 }

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Calendar, LogOut, LayoutDashboard } from 'lucide-react';
+import { Calendar, LogOut, LayoutDashboard, MessageCircle } from 'lucide-react';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -53,6 +53,15 @@ export default function Navbar() {
                 My Dashboard
               </Link>
               
+              {/* Messages Button */}
+              <button 
+                onClick={() => navigate(getDashboardPath(user.role), { state: { activeTab: 'messages' } })}
+                className="flex items-center gap-2 p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                title="Inbox"
+              >
+                <MessageCircle className="w-5 h-5" />
+              </button>
+
               <div className="h-6 w-px bg-gray-200 hidden sm:block"></div>
 
               {/* Logout Button */}

@@ -25,6 +25,67 @@ app.use('/api/customer', customerRoutes);
 app.use('/api/vendor', vendorRoutes);
 app.use('/api/venue-owner', venueOwnerRoutes);
 
+// Public API for Venues
+app.get('/api/venues/public', async (req, res) => {
+  try {
+    const { date, capacity, budget } = req.query;
+    
+    let query = `
+      SELECT v.*, u.name as owner_name, u.id as owner_user_id 
+      FROM venues v 
+      LEFT JOIN users u ON v.owner_id = u.id 
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (capacity && !isNaN(capacity)) {
+      query += ` AND v.capacity >= ?`;
+      params.push(Number(capacity));
+    }
+
+    if (budget) {
+      if (budget === 'low') {
+        query += ` AND v.price_per_day <= 1000`;
+      } else if (budget === 'med') {
+        query += ` AND v.price_per_day BETWEEN 1000 AND 5000`;
+      } else if (budget === 'high') {
+        query += ` AND v.price_per_day > 5000`;
+      }
+    }
+
+    if (date) {
+      query += ` AND v.id NOT IN (
+        SELECT venue_id FROM bookings 
+        WHERE event_date = ? AND booking_status IN ('pending', 'confirmed')
+      )`;
+      params.push(date);
+    }
+
+    query += ` ORDER BY v.created_at DESC`;
+
+    const [venues] = await db.query(query, params);
+    res.status(200).json(venues);
+  } catch (error) {
+    console.error("Error fetching public venues:", error);
+    res.status(500).json({ message: 'Server error fetching venues' });
+  }
+});
+
+// Public API for Vendors
+app.get('/api/vendors/public', async (req, res) => {
+  try {
+    const [vendors] = await db.query(`
+      SELECT v.* 
+      FROM vendors v 
+      ORDER BY v.id ASC
+    `);
+    res.status(200).json(vendors);
+  } catch (error) {
+    console.error("Error fetching public vendors:", error);
+    res.status(500).json({ message: 'Server error fetching vendors' });
+  }
+});
+
 // 4. Health check endpoint (Great for testing if the DB is connected!)
 app.get('/api/health', async (req, res) => {
   try {
