@@ -38,12 +38,12 @@ router.post('/register', async (req, res) => {
       [name, email, hashedPassword, role, initialStatus, phone || '', government_id || null, business_license_id || null]
     );
 
-    // If registered as a vendor, create an initial vendor profile record
+    // If registered as a vendor, randomly assign one unique available vendor
     if (role === 'vendor') {
-      await db.query(
-        'INSERT INTO vendors (user_id, service_type, portfolio_description, starting_rate) VALUES (?, ?, ?, ?)',
-        [result.insertId, 'catering', 'Default portfolio', 0.00]
-      );
+      const [availableVendors] = await db.query('SELECT id FROM vendors WHERE user_id IS NULL ORDER BY RAND() LIMIT 1');
+      if (availableVendors.length > 0) {
+        await db.query('UPDATE vendors SET user_id = ? WHERE id = ?', [result.insertId, availableVendors[0].id]);
+      }
     }
 
     // If registered as a venue_owner, randomly assign one unique available venue

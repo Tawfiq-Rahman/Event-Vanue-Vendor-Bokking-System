@@ -70,6 +70,37 @@ router.put('/bookings/:id/pay', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
+// 2b. PAY FULL REMAINING BALANCE
+// ==========================================
+router.put('/bookings/:id/pay-full', authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const bookingId = req.params.id;
+
+    const [bookings] = await db.query(
+      'SELECT total_amount FROM bookings WHERE id = ? AND customer_id = ? AND booking_status = "confirmed"', 
+      [bookingId, customerId]
+    );
+
+    if (bookings.length === 0) {
+      return res.status(404).json({ message: 'Confirmed booking not found.' });
+    }
+
+    const totalAmount = bookings[0].total_amount;
+
+    await db.query(
+      'UPDATE bookings SET advance_paid = ?, booking_status = "completed" WHERE id = ?',
+      [totalAmount, bookingId]
+    );
+
+    res.status(200).json({ message: 'Full payment successful!' });
+  } catch (error) {
+    console.error("Error paying full balance:", error);
+    res.status(500).json({ message: 'Server error during payment' });
+  }
+});
+
+// ==========================================
 // 3. GET CUSTOMER PROFILE
 // ==========================================
 router.get('/profile', authenticateToken, async (req, res) => {
@@ -236,9 +267,20 @@ router.post('/bookings', authenticateToken, async (req, res) => {
     const customerId = req.user.id;
     const { venue_id, event_date, guest_count, total_amount, vendor_ids } = req.body;
 
+    // Check if the user already has a booking on this date
+    const [existingBookings] = await db.query(
+      'SELECT id FROM bookings WHERE customer_id = ? AND event_date = ? AND booking_status != "cancelled" AND booking_status != "rejected"',
+      [customerId, event_date]
+    );
+
+    if (existingBookings.length > 0) {
+      return res.status(400).json({ message: 'You already have a booking on this date!' });
+    }
+
+    const initialStatus = venue_id ? 'pending' : 'confirmed';
     const [result] = await db.query(
-      'INSERT INTO bookings (customer_id, venue_id, event_date, guest_count, total_amount, booking_status) VALUES (?, ?, ?, ?, ?, "pending")',
-      [customerId, venue_id, event_date, guest_count, total_amount]
+      'INSERT INTO bookings (customer_id, venue_id, event_date, guest_count, total_amount, booking_status) VALUES (?, ?, ?, ?, ?, ?)',
+      [customerId, venue_id || null, event_date, guest_count, total_amount, initialStatus]
     );
 
     const bookingId = result.insertId;
@@ -321,30 +363,40 @@ router.get('/chat-contacts', authenticateToken, async (req, res) => {
   try {
     const customerId = req.user.id;
     
-    // Get unique owners
-    const [owners] = await db.query(`
-      SELECT DISTINCT u.id, u.name, u.role, u.profile_picture 
-      FROM bookings b 
-      JOIN venues v ON b.venue_id = v.id 
-      JOIN users u ON v.owner_id = u.id 
-      WHERE b.customer_id = ?
-    `, [customerId]);
+    // Get unique owners and vendors involved in bookings, ordered by most recent message
+      const query = `
+        SELECT u.id, u.name, u.role, u.profile_picture, MAX(m.sent_at) as last_message_time, COUNT(m.id) as message_count
+        FROM users u
+        LEFT JOIN messages m ON (m.sender_id = u.id AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = u.id)
+        WHERE u.id IN (
+          SELECT v.owner_id 
+          FROM bookings b 
+          JOIN venues v ON b.venue_id = v.id 
+          WHERE b.customer_id = ?
+          
+          UNION
+          
+          SELECT ven.user_id 
+          FROM bookings b 
+          JOIN booking_vendors bv ON b.id = bv.booking_id 
+          JOIN vendors ven ON bv.vendor_id = ven.id 
+          WHERE b.customer_id = ?
 
-    // Get unique vendors
-    const [vendors] = await db.query(`
-      SELECT DISTINCT u.id, u.name, u.role, u.profile_picture 
-      FROM bookings b 
-      JOIN booking_vendors bv ON b.id = bv.booking_id
-      JOIN vendors ven ON bv.vendor_id = ven.id
-      JOIN users u ON ven.user_id = u.id 
-      WHERE b.customer_id = ?
-    `, [customerId]);
+          UNION
 
-    const contacts = [...owners, ...vendors];
-    // Remove duplicates if a user is somehow both
-    const uniqueContacts = Array.from(new Map(contacts.map(item => [item.id, item])).values());
+          SELECT sender_id FROM messages WHERE receiver_id = ?
+
+          UNION
+
+          SELECT receiver_id FROM messages WHERE sender_id = ?
+        )
+        GROUP BY u.id, u.name, u.role, u.profile_picture
+        ORDER BY MAX(m.sent_at) DESC, u.name ASC
+      `;
+      
+      const [contacts] = await db.query(query, [customerId, customerId, customerId, customerId, customerId, customerId]);
     
-    res.json(uniqueContacts);
+    res.json(contacts);
   } catch (error) {
     console.error('Chat contacts error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -362,7 +414,7 @@ router.get('/bookings/:id/invoice', authenticateToken, async (req, res) => {
     const [bookings] = await db.query(`
       SELECT b.*, v.title as venue_name, v.price_per_day, u.name as customer_name, u.email 
       FROM bookings b 
-      JOIN venues v ON b.venue_id = v.id 
+      LEFT JOIN venues v ON b.venue_id = v.id 
       JOIN users u ON b.customer_id = u.id
       WHERE b.id = ? AND b.customer_id = ?
     `, [bookingId, customerId]);
@@ -401,7 +453,11 @@ router.get('/bookings/:id/invoice', authenticateToken, async (req, res) => {
     doc.moveDown();
     
     doc.font('Helvetica-Bold').text('Booking Details:');
-    doc.font('Helvetica').text(`Venue: ${booking.venue_name}`);
+    if (booking.venue_id) {
+      doc.font('Helvetica').text(`Venue: ${booking.venue_name}`);
+    } else {
+      doc.font('Helvetica').text(`Vendor: ${booking.venue_name}`);
+    }
     doc.text(`Event Date: ${new Date(booking.event_date).toLocaleDateString()}`);
     doc.text(`Guests: ${booking.guest_count}`);
     doc.text(`Status: ${booking.booking_status.toUpperCase()}`);
@@ -410,7 +466,9 @@ router.get('/bookings/:id/invoice', authenticateToken, async (req, res) => {
     doc.font('Helvetica-Bold').text('Charges:', { underline: true });
     doc.moveDown(0.5);
     
-    doc.font('Helvetica').text(`Venue Rental (${booking.venue_name}): $${booking.price_per_day}`);
+    if (booking.venue_name) {
+      doc.font('Helvetica').text(`Venue Rental (${booking.venue_name}): $${booking.price_per_day}`);
+    }
     
     let totalVendors = 0;
     vendors.forEach(v => {
@@ -433,8 +491,6 @@ router.get('/bookings/:id/invoice', authenticateToken, async (req, res) => {
   }
 });
 
-module.exports = router;
-
 // ==========================================
 // 6. GET CUSTOMER BOOKINGS (Upcoming/Actionable)
 // ==========================================
@@ -447,10 +503,14 @@ router.get('/bookings', authenticateToken, async (req, res) => {
              b.booking_status as status, 
              CONCAT('$', FORMAT(b.total_amount, 0)) as total, 
              CONCAT('$', FORMAT(b.advance_paid, 0)) as paid,
-             v.title as venueName
+             COALESCE(
+               v.title, 
+               (SELECT ven.title FROM booking_vendors bv JOIN vendors ven ON bv.vendor_id = ven.id WHERE bv.booking_id = b.id LIMIT 1),
+               'Independent Vendor Booking'
+             ) as venueName
       FROM bookings b
-      JOIN venues v ON b.venue_id = v.id
-      WHERE b.customer_id = ? 
+      LEFT JOIN venues v ON b.venue_id = v.id
+      WHERE b.customer_id = ?
         AND (b.booking_status NOT IN ('rejected', 'cancelled', 'completed') 
              OR (b.booking_status IN ('rejected', 'cancelled') AND b.customer_seen = 0))
       ORDER BY b.event_date DESC
@@ -475,10 +535,14 @@ router.get('/history', authenticateToken, async (req, res) => {
              b.booking_status as status, 
              CONCAT('$', FORMAT(b.total_amount, 0)) as total, 
              CONCAT('$', FORMAT(b.advance_paid, 0)) as paid,
-             v.title as venueName
+             COALESCE(
+               v.title, 
+               (SELECT ven.title FROM booking_vendors bv JOIN vendors ven ON bv.vendor_id = ven.id WHERE bv.booking_id = b.id LIMIT 1),
+               'Independent Vendor Booking'
+             ) as venueName
       FROM bookings b
-      JOIN venues v ON b.venue_id = v.id
-      WHERE b.customer_id = ? 
+      LEFT JOIN venues v ON b.venue_id = v.id
+      WHERE b.customer_id = ?
         AND (b.booking_status = 'completed' 
              OR (b.booking_status IN ('rejected', 'cancelled') AND b.customer_seen = 1))
       ORDER BY b.event_date DESC
@@ -508,3 +572,50 @@ router.put('/bookings/mark-seen', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// ==========================================
+// 9. GET CUSTOMER STATEMENTS
+// ==========================================
+router.get('/statements', authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const query = `
+      SELECT b.id as rawId, CONCAT('BKG-', LPAD(b.id, 3, '0')) as bookingId, 
+             DATE_FORMAT(b.created_at, '%b %d, %Y') as date, 
+             b.booking_status as status, 
+             b.total_amount, 
+             b.advance_paid,
+             COALESCE(
+               v.title, 
+               (SELECT ven.title FROM booking_vendors bv JOIN vendors ven ON bv.vendor_id = ven.id WHERE bv.booking_id = b.id LIMIT 1),
+               'Independent Vendor Booking'
+             ) as venueName
+      FROM bookings b
+      LEFT JOIN venues v ON b.venue_id = v.id
+      WHERE b.customer_id = ? AND b.advance_paid > 0
+      ORDER BY b.id DESC
+    `;
+    const [statements] = await db.query(query, [customerId]);
+    res.status(200).json(statements);
+  } catch (error) {
+    console.error("Error fetching statements:", error);
+    res.status(500).json({ message: 'Server error fetching statements' });
+  }
+});
+
+// ==========================================
+// 10. GET CUSTOMER ANNOUNCEMENTS
+// ==========================================
+router.get('/announcements', authenticateToken, async (req, res) => {
+  try {
+    const [announcements] = await db.query(
+      "SELECT * FROM announcements WHERE target_role IN ('all', 'customer') ORDER BY created_at DESC"
+    );
+    res.status(200).json(announcements);
+  } catch (error) {
+    console.error("Error fetching announcements:", error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+module.exports = router;

@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { CalendarDays, Search, MessageSquare, Settings, LogOut, Download, Star, MapPin, User, FileText, Send, CheckCircle, Plus, Store, Clock } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
+import { CalendarDays, Search, MessageSquare, Settings, LogOut, Download, Star, MapPin, User, Users, FileText, Send, CheckCircle, Plus, Store, Clock } from 'lucide-react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 
 export default function CustomerDashboard() {
   const [activeTab, setActiveTab] = useState('bookings');
   const [bookings, setBookings] = useState([]);
   const [historyBookings, setHistoryBookings] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [statements, setStatements] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState(null);
   const [profileForm, setProfileForm] = useState({ name: '', email: '', phone: '', dob: '', address: '', profile_picture: '' });
   const [isUpdating, setIsUpdating] = useState(false);
@@ -22,14 +23,25 @@ export default function CustomerDashboard() {
   const [vendors, setVendors] = useState([]);
   const [selectedVenue, setSelectedVenue] = useState(null);
   const [selectedVendors, setSelectedVendors] = useState([]);
+  const [selectedIndependentVendor, setSelectedIndependentVendor] = useState(null);
   const [guestCount, setGuestCount] = useState('');
+  
+  const [detailsModal, setDetailsModal] = useState({ isOpen: false, type: '', data: null });
   
   const [chatContacts, setChatContacts] = useState([]);
   const [activeChat, setActiveChat] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
   const [newMessage, setNewMessage] = useState('');
 
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -113,8 +125,23 @@ export default function CustomerDashboard() {
       }
     };
 
+    const fetchStatements = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/customer/statements', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setStatements(data);
+        }
+      } catch (error) {
+        console.error("Backend offline. Could not fetch statements.", error);
+      }
+    };
+
     if (activeTab === 'bookings') fetchBookings();
     if (activeTab === 'history') fetchHistoryBookings();
+    if (activeTab === 'statements') fetchStatements();
   }, [activeTab]);
 
   const handlePayAdvance = async (rawId) => {
@@ -139,6 +166,33 @@ export default function CustomerDashboard() {
       }
     } catch (error) {
       console.error("Error paying advance:", error);
+      alert('Network error while processing payment.');
+    }
+  };
+
+  const handlePayFull = async (rawId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/customer/bookings/${rawId}/pay-full`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      
+      if (response.ok) {
+        // Refresh bookings to reflect full payment
+        const updatedResponse = await fetch('http://localhost:5000/api/customer/bookings', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (updatedResponse.ok) {
+          const data = await updatedResponse.json();
+          setBookings(data);
+        }
+        alert('Full payment successful!');
+      } else {
+        const errorData = await response.json();
+        alert(errorData.message || 'Payment failed');
+      }
+    } catch (error) {
+      console.error("Error paying full balance:", error);
       alert('Network error while processing payment.');
     }
   };
@@ -294,6 +348,45 @@ export default function CustomerDashboard() {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (updatedResponse.ok) setBookings(await updatedResponse.json());
+      } else {
+        const data = await res.json();
+        alert(data.message || "Error submitting booking.");
+      }
+    } catch (err) { console.error(err); alert("Error submitting booking."); }
+  };
+
+  const handleBookIndependentVendor = async () => {
+    if (!selectedIndependentVendor || !searchParams.date || !guestCount) return alert("Date and guest count are required!");
+
+    const payload = {
+      venue_id: null,
+      event_date: searchParams.date,
+      guest_count: guestCount,
+      total_amount: Number(selectedIndependentVendor.starting_rate),
+      vendor_ids: [{ id: selectedIndependentVendor.id, cost: selectedIndependentVendor.starting_rate }]
+    };
+
+    try {
+      const res = await fetch('http://localhost:5000/api/customer/bookings', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}` 
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        alert("Vendor booking confirmed!");
+        setSelectedIndependentVendor(null);
+        setActiveTab('bookings');
+        // Refresh bookings
+        const updatedResponse = await fetch('http://localhost:5000/api/customer/bookings', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (updatedResponse.ok) setBookings(await updatedResponse.json());
+      } else {
+        const data = await res.json();
+        alert(data.message || "Error submitting booking.");
       }
     } catch (err) { console.error(err); alert("Error submitting booking."); }
   };
@@ -303,7 +396,26 @@ export default function CustomerDashboard() {
       const res = await fetch('http://localhost:5000/api/customer/chat-contacts', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-      if (res.ok) setChatContacts(await res.json());
+      if (res.ok) {
+        const fetchedContacts = await res.json();
+        setChatContacts(prev => {
+          const merged = [...fetchedContacts];
+          // If we have an active chat that isn't in the fetched list, keep it
+          if (activeChat && activeChat.id !== 'system_notices' && !merged.find(c => c.id === activeChat.id)) {
+            merged.unshift(activeChat);
+          }
+          return merged;
+        });
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/customer/announcements', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) setAnnouncements(await res.json());
     } catch (err) { console.error(err); }
   };
 
@@ -328,12 +440,33 @@ export default function CustomerDashboard() {
       if (res.ok) {
         setNewMessage('');
         fetchMessages(activeChat.id);
+        fetchChatContacts();
       }
     } catch (err) { console.error(err); }
   };
 
-  const handleDownloadInvoice = (id) => {
-    window.open(`http://localhost:5000/api/customer/bookings/${id}/invoice?token=${localStorage.getItem('token')}`, '_blank');
+  const handleDownloadInvoice = async (id) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/customer/bookings/${id}/invoice`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to download invoice');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `invoice_BKG-${id.toString().padStart(3, '0')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      alert('Error downloading invoice');
+    }
   };
 
   const handleRate = async (booking) => {
@@ -359,11 +492,12 @@ export default function CustomerDashboard() {
        fetchVendors();
     } else if (activeTab === 'messages') {
        fetchChatContacts();
+       fetchAnnouncements();
     }
   }, [activeTab]);
 
   useEffect(() => {
-    if (activeChat) {
+    if (activeChat && activeChat.id !== 'system_notices') {
       fetchMessages(activeChat.id);
       const interval = setInterval(() => fetchMessages(activeChat.id), 5000); // Simple polling
       return () => clearInterval(interval);
@@ -474,8 +608,8 @@ export default function CustomerDashboard() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-xl font-black text-gray-900">{booking.venueName}</h3>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          booking.status === 'Confirmed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${
+                          (booking.status || '').toLowerCase() === 'confirmed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
                         }`}>
                           {booking.status}
                         </span>
@@ -491,7 +625,7 @@ export default function CustomerDashboard() {
                     </div>
                     
                     <div className="mt-6 md:mt-0 flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                      {booking.status === 'Pending' && (
+                      {(booking.status || '').toLowerCase() === 'pending' && (
                         <button 
                           onClick={() => handlePayAdvance(booking.rawId)}
                           className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 transition-all"
@@ -499,8 +633,16 @@ export default function CustomerDashboard() {
                           Pay Advance
                         </button>
                       )}
-                      {booking.status === 'Confirmed' && (
+                      {(booking.status || '').toLowerCase() === 'confirmed' && (
                         <>
+                          {booking.total !== booking.paid && (
+                            <button 
+                              onClick={() => handlePayFull(booking.rawId)}
+                              className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg shadow-green-200 transition-all whitespace-nowrap"
+                            >
+                              Pay Balance
+                            </button>
+                          )}
                           <button onClick={() => handleDownloadInvoice(booking.rawId)} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold rounded-xl transition-all shadow-sm">
                             <Download className="w-4 h-4" /> Invoice
                           </button>
@@ -553,6 +695,19 @@ export default function CustomerDashboard() {
                         <span className="font-bold text-gray-500">Paid: {booking.paid}</span>
                       </div>
                     </div>
+                    
+                    <div className="mt-6 md:mt-0 flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                      {(booking.status || '').toLowerCase() === 'completed' && (
+                        <>
+                          <button onClick={() => handleDownloadInvoice(booking.rawId)} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold rounded-xl transition-all shadow-sm">
+                            <Download className="w-4 h-4" /> Invoice
+                          </button>
+                          <button onClick={() => handleRate(booking)} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-yellow-50 border border-yellow-200 hover:bg-yellow-100 text-yellow-700 font-bold rounded-xl transition-all shadow-sm">
+                            <Star className="w-4 h-4 fill-yellow-500" /> Rate
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
@@ -604,12 +759,20 @@ export default function CustomerDashboard() {
                       <span className="font-black text-indigo-600">${v.price_per_day}/day</span>
                     </div>
                     <div className="flex flex-col gap-2">
-                      <button 
-                        onClick={() => { setSelectedVenue(v); setGuestCount(searchParams.capacity || ''); }}
-                        className="w-full py-3 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 font-bold rounded-xl transition-all"
-                      >
-                        Book This Venue
-                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => setDetailsModal({ isOpen: true, type: 'venue', data: v })}
+                          className="w-1/3 py-3 border border-gray-200 hover:bg-gray-50 text-gray-600 font-bold rounded-xl transition-all text-center flex items-center justify-center"
+                        >
+                          About
+                        </button>
+                        <button 
+                          onClick={() => { setSelectedVenue(v); setGuestCount(searchParams.capacity || ''); }}
+                          className="flex-1 py-3 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 font-bold rounded-xl transition-all"
+                        >
+                          Book This Venue
+                        </button>
+                      </div>
                       <button 
                         onClick={() => {
                           const contactInfo = { id: v.owner_user_id, name: v.owner_name || 'EventHub Partner', role: 'venue_owner' };
@@ -656,15 +819,24 @@ export default function CustomerDashboard() {
                           <span className="font-bold text-gray-800">{vendor.vendor_name}</span>
                           <span className="text-xs text-gray-500 ml-2 bg-gray-100 px-2 py-1 rounded">{vendor.service_type}</span>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-4">
+                          <button 
+                            type="button"
+                            onClick={() => setDetailsModal({ isOpen: true, type: 'vendor', data: vendor })}
+                            className="text-xs text-indigo-600 font-bold hover:underline"
+                          >
+                            About Vendor
+                          </button>
                           <span className="font-bold text-indigo-600">${vendor.starting_rate}</span>
                           <button 
                             onClick={() => {
-                              if (selectedVendors.find(v => v.id === vendor.id)) {
-                                setSelectedVendors(selectedVendors.filter(v => v.id !== vendor.id));
-                              } else {
-                                setSelectedVendors([...selectedVendors, vendor]);
-                              }
+                              setSelectedVendors(prev => {
+                                if (prev.find(v => v.id === vendor.id)) {
+                                  return prev.filter(v => v.id !== vendor.id);
+                                } else {
+                                  return [...prev, vendor];
+                                }
+                              });
                             }}
                             className={`p-1.5 rounded-lg border ${selectedVendors.find(v => v.id === vendor.id) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-400 border-gray-200'}`}
                           >
@@ -700,41 +872,117 @@ export default function CustomerDashboard() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {vendors.map(v => (
-                <div key={v.id} className="bg-[#fffdf8]/95 backdrop-blur-xl rounded-3xl border border-white/40 shadow-xl overflow-hidden group p-6 flex flex-col">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-black text-xl border-4 border-white shadow-sm">
-                      {v.vendor_name.charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black text-gray-900">{v.vendor_name}</h3>
-                      <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs font-bold uppercase tracking-wider">{v.service_type.replace('_', ' ')}</span>
+                <div key={v.id} className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 group flex flex-col">
+                  <div className="h-52 overflow-hidden relative bg-gray-100">
+                    <img 
+                      src={v.image_url || 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=600'} 
+                      alt={v.vendor_name} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                    />
+                    <div className="absolute top-4 right-4 bg-white/95 backdrop-blur px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm text-gray-900">
+                      <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" /> {v.rating || '5.0'}
                     </div>
                   </div>
-                  <p className="text-gray-500 text-sm mb-6 flex-1">{v.description || "Top rated vendor on EventHub. Professional service guaranteed."}</p>
                   
-                  <div className="flex justify-between items-center mb-6 pt-4 border-t border-gray-100">
-                    <span className="text-sm font-bold text-gray-500">Starting from</span>
-                    <span className="font-black text-indigo-600 text-lg">${v.starting_rate}</span>
+                  <div className="p-6 flex flex-col flex-grow">
+                    <div className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3 bg-indigo-50 w-max px-2.5 py-1 rounded-md">
+                      {v.service_type.replace('_', ' ')}
+                    </div>
+                    
+                    <h3 className="font-black text-xl text-gray-900 mb-2">{v.vendor_name}</h3>
+                    
+                    <div className="flex items-center text-gray-500 text-sm mb-4 font-medium">
+                      <MapPin className="w-4 h-4 mr-1.5 text-gray-400" /> {v.location || 'Available Nationwide'}
+                    </div>
+                    
+                    <p className="text-gray-500 text-sm mb-6 flex-1 line-clamp-2">
+                      {v.description || "Top rated vendor on EventHub. Professional service guaranteed."}
+                    </p>
+                    
+                    <div className="mt-auto pt-5 border-t border-gray-100 flex justify-between items-center gap-4">
+                      <span className="font-black text-gray-900">From ${Number(v.starting_rate || 0).toLocaleString()}</span>
+                      <div className="flex flex-wrap gap-2 justify-end mt-2">
+                        <button 
+                          onClick={() => setDetailsModal({ isOpen: true, type: 'vendor', data: v })}
+                          className="px-3 py-2 rounded-lg text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors flex items-center justify-center"
+                        >
+                          About
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const contactInfo = { id: v.user_id, name: v.vendor_name, role: 'vendor' };
+                            if (!chatContacts.find(c => c.id === contactInfo.id)) {
+                              setChatContacts(prev => [contactInfo, ...prev]);
+                            }
+                            setActiveChat(contactInfo);
+                            setActiveTab('messages');
+                          }}
+                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-1"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" /> Message
+                        </button>
+                        <button 
+                          onClick={() => setSelectedIndependentVendor(v)}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-2 rounded-lg text-xs transition-colors flex items-center shadow-md shadow-indigo-200"
+                        >
+                          Book Now
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  
-                  <button 
-                    onClick={() => {
-                      const contactInfo = { id: v.user_id, name: v.vendor_name, role: 'vendor' };
-                      if (!chatContacts.find(c => c.id === contactInfo.id)) {
-                        setChatContacts(prev => [contactInfo, ...prev]);
-                      }
-                      setActiveChat(contactInfo);
-                      setActiveTab('messages');
-                    }}
-                    className="w-full py-3 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 mt-auto"
-                  >
-                    <MessageSquare className="w-4 h-4" /> Message Vendor
-                  </button>
                 </div>
               ))}
             </div>
           </div>
         )}
+
+            {/* Independent Vendor Booking Form */}
+            {selectedIndependentVendor && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={() => setSelectedIndependentVendor(null)}></div>
+                <div className="bg-white rounded-3xl w-full max-w-2xl relative z-10 shadow-2xl p-8 max-h-[90vh] overflow-y-auto">
+                  <h2 className="text-2xl font-black text-gray-900 mb-2">Book {selectedIndependentVendor.vendor_name}</h2>
+                  <p className="text-gray-500 mb-6">Complete your booking details for this vendor.</p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                     <div>
+                       <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Event Date</label>
+                       <input type="date" className="w-full px-4 py-2 border rounded-xl" value={searchParams.date} onChange={e => setSearchParams({...searchParams, date: e.target.value})} min={new Date().toISOString().split('T')[0]} />
+                     </div>
+                     <div>
+                       <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Estimated Guests</label>
+                       <input type="number" className="w-full px-4 py-2 border rounded-xl" value={guestCount} onChange={e => setGuestCount(e.target.value)} />
+                     </div>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-2xl p-6 mb-8 border border-gray-100">
+                    <h3 className="font-bold text-gray-900 mb-4 uppercase text-xs tracking-wider">Booking Summary</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-gray-600 font-medium">
+                        <span>{selectedIndependentVendor.service_type} Fee</span>
+                        <span className="font-bold">${selectedIndependentVendor.starting_rate}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Total Cost</p>
+                        <p className="text-2xl font-black text-gray-900">${Number(selectedIndependentVendor.starting_rate)}</p>
+                      </div>
+                      <div className="flex gap-3">
+                        <button onClick={() => setSelectedIndependentVendor(null)} className="px-6 py-3 font-bold text-gray-500 hover:bg-gray-100 rounded-xl">Cancel</button>
+                        <button 
+                          onClick={handleBookIndependentVendor} 
+                          className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 transition-all"
+                        >
+                          Confirm Vendor Booking
+                        </button>
+                      </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
         {activeTab === 'messages' && (
           <div className="bg-[#fffdf8]/95 backdrop-blur-xl rounded-3xl border border-white/40 shadow-2xl overflow-hidden flex h-[600px]">
@@ -744,6 +992,23 @@ export default function CustomerDashboard() {
                 <h3 className="font-black text-gray-900">Your Conversations</h3>
               </div>
               <div className="flex-1 overflow-y-auto">
+                <button 
+                  onClick={() => setActiveChat({ id: 'system_notices', name: 'System Notices', role: 'admin' })}
+                  className={`w-full text-left p-4 border-b border-gray-100 flex items-center gap-3 transition-colors ${activeChat?.id === 'system_notices' ? 'bg-indigo-50 border-indigo-100' : 'hover:bg-white'}`}
+                >
+                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                    <MessageSquare className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900">System Notices</div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">ADMIN ANNOUNCEMENTS</div>
+                    {announcements.length > 0 && (
+                      <div className="text-[10px] text-indigo-600 font-bold mt-0.5">
+                        {announcements.length} {announcements.length === 1 ? 'Notice' : 'Notices'}
+                      </div>
+                    )}
+                  </div>
+                </button>
                 {chatContacts.map(contact => (
                   <button 
                     key={contact.id} 
@@ -755,7 +1020,12 @@ export default function CustomerDashboard() {
                     </div>
                     <div>
                       <div className="font-bold text-gray-900">{contact.name}</div>
-                      <div className="text-xs font-bold text-gray-400 uppercase">{contact.role.replace('_', ' ')}</div>
+                      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{contact.role.replace('_', ' ')}</div>
+                      {contact.message_count > 0 && (
+                        <div className="text-[10px] text-indigo-600 font-bold mt-0.5">
+                          {contact.message_count} {contact.message_count === 1 ? 'Message' : 'Messages'}
+                        </div>
+                      )}
                     </div>
                   </button>
                 ))}
@@ -767,33 +1037,62 @@ export default function CustomerDashboard() {
               {activeChat ? (
                 <>
                   <div className="p-4 border-b border-gray-200 bg-white flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">{activeChat.name.charAt(0)}</div>
+                    <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+                      {activeChat.id === 'system_notices' ? <MessageSquare className="w-5 h-5" /> : activeChat.name.charAt(0)}
+                    </div>
                     <span className="font-black text-gray-900">{activeChat.name}</span>
                   </div>
                   <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/30">
-                    {messages.map(msg => {
-                      const isMe = msg.sender_id === user.id;
-                      return (
-                        <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[70%] p-3 rounded-2xl text-sm ${isMe ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'}`}>
-                            {msg.message}
+                    {activeChat.id === 'system_notices' ? (
+                      announcements.length === 0 ? (
+                        <div className="text-center text-gray-400 py-10 font-medium">No notices from the administration.</div>
+                      ) : (
+                        announcements.map((ann, idx) => (
+                          <div key={ann.id} className="bg-white p-6 rounded-2xl shadow-sm border border-indigo-50">
+                            <h4 className="font-black text-gray-900 mb-2 flex items-center gap-2">
+                              <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs">{idx + 1}</span>
+                              {ann.title}
+                            </h4>
+                            <p className="text-gray-600 text-sm whitespace-pre-wrap pl-8">{ann.message}</p>
+                            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider pl-8 mt-4">
+                              {new Date(ann.created_at).toLocaleString()}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        ))
+                      )
+                    ) : (
+                      messages.map(msg => {
+                        const isMine = msg.sender_id === user.id;
+                        return (
+                          <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[70%] p-4 rounded-2xl ${
+                              isMine ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white border border-gray-100 text-gray-900 rounded-bl-sm'
+                            }`}>
+                              <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                              <div className={`text-[10px] mt-2 font-bold ${isMine ? 'text-indigo-200' : 'text-gray-400'}`}>
+                                {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
-                  <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-200 flex gap-2">
-                    <input 
-                      type="text" 
-                      placeholder="Type your message..." 
-                      className="flex-1 px-4 py-2 border border-gray-200 rounded-full focus:outline-none focus:border-indigo-500"
-                      value={newMessage}
-                      onChange={e => setNewMessage(e.target.value)}
-                    />
-                    <button type="submit" className="w-10 h-10 bg-indigo-600 rounded-full text-white flex items-center justify-center hover:bg-indigo-700">
-                      <Send className="w-4 h-4 -ml-1" />
-                    </button>
-                  </form>
+                  {activeChat.id !== 'system_notices' && (
+                    <div className="p-4 bg-white border-t border-gray-200">
+                      <form onSubmit={handleSendMessage} className="flex gap-2">
+                        <input 
+                          type="text" placeholder="Type a message..."
+                          className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                        />
+                        <button type="submit" className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors flex items-center gap-2">
+                          <Send className="w-4 h-4" /> Send
+                        </button>
+                      </form>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
@@ -806,10 +1105,60 @@ export default function CustomerDashboard() {
         )}
 
         {activeTab === 'statements' && (
-          <div className="bg-[#fffdf8]/95 backdrop-blur-xl rounded-3xl border border-white/40 shadow-2xl p-10 text-center">
-             <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-             <h2 className="text-2xl font-black text-gray-900 mb-2">Billing Statements</h2>
-             <p className="text-gray-500 max-w-sm mx-auto">Your payment history and invoices will appear here once you complete a transaction.</p>
+          <div className="space-y-6">
+            <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-2"><FileText className="w-6 h-6 text-white"/> Billing Statements</h2>
+            <div className="bg-[#fffdf8]/95 backdrop-blur-xl rounded-3xl border border-white/40 shadow-2xl p-8">
+              {statements.length === 0 ? (
+                <div className="text-center py-12">
+                  <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 font-medium">Your payment history and invoices will appear here once you complete a transaction.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-gray-500 text-sm tracking-wider uppercase">
+                        <th className="py-4 font-bold">Date</th>
+                        <th className="py-4 font-bold">Booking ID</th>
+                        <th className="py-4 font-bold">Vendor / Venue</th>
+                        <th className="py-4 font-bold">Amount Paid</th>
+                        <th className="py-4 font-bold">Total Cost</th>
+                        <th className="py-4 font-bold">Status</th>
+                        <th className="py-4 font-bold">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {statements.map((stmt, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="py-4 text-sm font-medium text-gray-700">{stmt.date}</td>
+                          <td className="py-4 text-sm font-bold text-indigo-600">{stmt.bookingId}</td>
+                          <td className="py-4 text-sm font-bold text-gray-900">{stmt.venueName}</td>
+                          <td className="py-4 text-sm font-black text-green-600">${Number(stmt.advance_paid).toLocaleString()}</td>
+                          <td className="py-4 text-sm font-bold text-gray-500">${Number(stmt.total_amount).toLocaleString()}</td>
+                          <td className="py-4">
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${
+                              stmt.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 
+                              stmt.status === 'confirmed' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                              'bg-gray-50 text-gray-700 border border-gray-100'
+                            }`}>
+                              {stmt.status === 'completed' ? 'Fully Paid' : 'Partially Paid'}
+                            </span>
+                          </td>
+                          <td className="py-4">
+                            <button 
+                              onClick={() => handleDownloadInvoice(stmt.rawId)} 
+                              className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold rounded-lg transition-all shadow-sm text-xs"
+                            >
+                              <Download className="w-3.5 h-3.5" /> PDF
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -962,6 +1311,87 @@ export default function CustomerDashboard() {
                   {isUpdating ? 'Saving Changes...' : 'Save All Changes'}
                 </button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Details Modal */}
+        {detailsModal.isOpen && detailsModal.data && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={() => setDetailsModal({ isOpen: false, type: '', data: null })}></div>
+            <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative z-10 shadow-2xl flex flex-col">
+              
+              {/* Modal Header / Cover Image */}
+              <div className="relative h-64 md:h-80 w-full bg-gray-100 flex-shrink-0">
+                <img 
+                  src={detailsModal.data.image_url || 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200'} 
+                  alt={detailsModal.data.title || detailsModal.data.vendor_name}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 to-transparent"></div>
+                <button 
+                  onClick={() => setDetailsModal({ isOpen: false, type: '', data: null })}
+                  className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 backdrop-blur text-white p-2 rounded-full transition-colors"
+                >
+                  <LogOut className="w-5 h-5 rotate-180" />
+                </button>
+                
+                <div className="absolute bottom-6 left-6 right-6">
+                  <div className="flex items-center gap-2 text-xs font-black text-indigo-400 uppercase tracking-widest mb-2 bg-indigo-900/40 w-max px-3 py-1 rounded-full backdrop-blur-md border border-indigo-400/20">
+                    {detailsModal.type === 'venue' ? 'Event Venue' : detailsModal.data.service_type?.replace('_', ' ')}
+                  </div>
+                  <h2 className="text-3xl md:text-5xl font-black text-white drop-shadow-md">
+                    {detailsModal.data.title || detailsModal.data.vendor_name}
+                  </h2>
+                </div>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-8 flex-1 bg-gray-50 flex flex-col md:flex-row gap-12">
+                <div className="flex-1 space-y-8">
+                  <section>
+                    <h3 className="text-2xl font-black text-gray-900 mb-4 flex items-center gap-2">
+                      <Star className="w-6 h-6 text-indigo-600" /> 
+                      About {detailsModal.data.title || detailsModal.data.vendor_name}
+                    </h3>
+                    <p className="text-gray-600 leading-relaxed text-lg">
+                      {detailsModal.data.description || "Top rated on EventHub. Professional service guaranteed. Let us make your event unforgettable."}
+                    </p>
+                  </section>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                      <div className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1"><MapPin className="w-4 h-4"/> Location</div>
+                      <div className="font-bold text-gray-900">{detailsModal.data.location || 'Available Nationwide'}</div>
+                    </div>
+                    {detailsModal.type === 'venue' && (
+                      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                        <div className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Users className="w-4 h-4"/> Capacity</div>
+                        <div className="font-bold text-gray-900">Up to {detailsModal.data.capacity} guests</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="md:w-80 flex-shrink-0">
+                  <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xl sticky top-8">
+                    <div className="text-center mb-6">
+                      <div className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Starting at</div>
+                      <div className="text-4xl font-black text-indigo-600">
+                        ${Number(detailsModal.data.price_per_day || detailsModal.data.starting_rate).toLocaleString()}
+                      </div>
+                      <div className="text-sm text-gray-500 font-medium mt-1">{detailsModal.type === 'venue' ? 'per day' : 'base rate'}</div>
+                    </div>
+                    <button 
+                      onClick={() => setDetailsModal({ isOpen: false, type: '', data: null })}
+                      className="w-full py-4 bg-gray-900 hover:bg-gray-800 text-white font-black rounded-xl transition-all shadow-lg active:scale-95"
+                    >
+                      Close Details
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
             </div>
           </div>
         )}
