@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 const db = require('./db');
+const ensureUserDocumentColumns = require('./migrate_user_documents');
 
 // 1. Import your dedicated route files
 const adminRoutes = require('./routes/adminRoutes');
@@ -97,5 +98,8 @@ app.get('/api/health', async (req, res) => {
 });
 
 // 5. Start the server
+// Make sure the users table has the registration document columns
+ensureUserDocumentColumns().catch((error) => console.error('Could not update users table:', error.message));
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));

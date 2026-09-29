@@ -1,6 +1,39 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ShieldCheck, Users, Building, Settings, LogOut, Check, X, Trash2, LayoutDashboard, Tag, Megaphone, Activity, Download } from 'lucide-react';
+import { ShieldCheck, Users, Building, Settings, LogOut, Check, X, Trash2, LayoutDashboard, Tag, Megaphone, Activity, Download, Eye, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import UserDocumentsModal, { UserAvatar } from '../component/UserDocumentsModal';
+
+// True when any of the values contains the search text (case-insensitive)
+const matchesSearch = (query, values) => {
+  const q = query.trim().toLowerCase();
+  return !q || values.some((value) => value != null && String(value).toLowerCase().includes(q));
+};
+
+// Search input used by the Manage Users and Manage Venues tabs
+function SearchBox({ value, onChange, placeholder }) {
+  return (
+    <div className="relative w-full sm:w-72">
+      <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full pl-9 pr-9 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-all"
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700 rounded-md transition-colors"
+          title="Clear search"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -14,7 +47,17 @@ export default function AdminDashboard() {
   const [newCategory, setNewCategory] = useState('');
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '', target_role: 'all' });
   const [isLoading, setIsLoading] = useState(true);
+  const [documentUser, setDocumentUser] = useState(null); // user whose ID documents are open in the popup
+  const [userSearch, setUserSearch] = useState('');
+  const [venueSearch, setVenueSearch] = useState('');
   const navigate = useNavigate();
+
+  const filteredUsers = allUsers.filter((user) => matchesSearch(userSearch, [
+    user.name, user.email, user.role && user.role.replace('_', ' '), user.status, user.government_id, user.business_license_id
+  ]));
+  const filteredVenues = allVenues.filter((venue) => matchesSearch(venueSearch, [
+    venue.title, venue.owner_name, venue.owner_email, venue.location, `VNE-${venue.id.toString().padStart(3, '0')}`
+  ]));
 
   // Unified fetching function that grabs the latest data from the database
   const fetchDashboardData = useCallback(async () => {
@@ -343,14 +386,27 @@ export default function AdminDashboard() {
                       pendingUsers.map((user) => (
                         <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                           <td className="p-6">
-                            <p className="font-bold text-gray-900">{user.name}</p>
-                            <p className="text-sm text-gray-500">{user.email}</p>
-                            {(user.government_id || user.business_license_id) && (
-                              <div className="mt-2 text-xs border-t border-gray-100 pt-2">
-                                {user.government_id && <p className="text-gray-600"><span className="font-bold">Gov ID:</span> {user.government_id}</p>}
-                                {user.business_license_id && <p className="text-gray-600"><span className="font-bold">License:</span> {user.business_license_id}</p>}
+                            <div className="flex items-start gap-3">
+                              <UserAvatar user={user} />
+                              <div>
+                                <p className="font-bold text-gray-900">{user.name}</p>
+                                <p className="text-sm text-gray-500">{user.email}</p>
+                                {(user.government_id || user.business_license_id) && (
+                                  <div className="mt-2 text-xs border-t border-gray-100 pt-2">
+                                    {user.government_id && <p className="text-gray-600"><span className="font-bold">Gov ID:</span> {user.government_id}</p>}
+                                    {user.business_license_id && <p className="text-gray-600"><span className="font-bold">License:</span> {user.business_license_id}</p>}
+                                  </div>
+                                )}
+                                {user.role !== 'admin' && (
+                                  <button
+                                    onClick={() => setDocumentUser(user)}
+                                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" /> View Documents
+                                  </button>
+                                )}
                               </div>
-                            )}
+                            </div>
                           </td>
                           <td className="p-6">
                             <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${
@@ -393,14 +449,17 @@ export default function AdminDashboard() {
         {activeTab === 'all-users' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="bg-[#fffdf8]/95 backdrop-blur-xl rounded-3xl border border-white/40 shadow-2xl overflow-hidden">
-              <div className="p-6 border-b border-white/40 flex items-center justify-between bg-white/50">
+              <div className="p-6 border-b border-white/40 flex flex-wrap items-center justify-between gap-4 bg-white/50">
                 <h3 className="text-lg font-black text-gray-900 flex items-center gap-2">
                   <Users className="w-5 h-5 text-indigo-600" />
                   All System Users
                 </h3>
-                <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-full shadow-sm">
-                  {allUsers.length} Users Total
-                </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <SearchBox value={userSearch} onChange={setUserSearch} placeholder="Search name, email, role, ID..." />
+                  <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-full shadow-sm whitespace-nowrap">
+                    {userSearch.trim() ? `${filteredUsers.length} of ${allUsers.length} Users` : `${allUsers.length} Users Total`}
+                  </span>
+                </div>
               </div>
               
               <div className="overflow-x-auto">
@@ -418,18 +477,33 @@ export default function AdminDashboard() {
                       <tr><td colSpan="4" className="p-12 text-center text-gray-400 font-bold">Fetching latest database records...</td></tr>
                     ) : allUsers.length === 0 ? (
                       <tr><td colSpan="4" className="p-12 text-center text-gray-400 font-bold">No users found in the database.</td></tr>
+                    ) : filteredUsers.length === 0 ? (
+                      <tr><td colSpan="4" className="p-12 text-center text-gray-400 font-bold">No users match "{userSearch.trim()}".</td></tr>
                     ) : (
-                      allUsers.map((user) => (
+                      filteredUsers.map((user) => (
                         <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                           <td className="p-6">
-                            <p className="font-bold text-gray-900">{user.name}</p>
-                            <p className="text-sm text-gray-500">{user.email}</p>
-                            {(user.government_id || user.business_license_id) && (
-                              <div className="mt-2 text-xs border-t border-gray-100 pt-2">
-                                {user.government_id && <p className="text-gray-600"><span className="font-bold">Gov ID:</span> {user.government_id}</p>}
-                                {user.business_license_id && <p className="text-gray-600"><span className="font-bold">License:</span> {user.business_license_id}</p>}
+                            <div className="flex items-start gap-3">
+                              <UserAvatar user={user} />
+                              <div>
+                                <p className="font-bold text-gray-900">{user.name}</p>
+                                <p className="text-sm text-gray-500">{user.email}</p>
+                                {(user.government_id || user.business_license_id) && (
+                                  <div className="mt-2 text-xs border-t border-gray-100 pt-2">
+                                    {user.government_id && <p className="text-gray-600"><span className="font-bold">Gov ID:</span> {user.government_id}</p>}
+                                    {user.business_license_id && <p className="text-gray-600"><span className="font-bold">License:</span> {user.business_license_id}</p>}
+                                  </div>
+                                )}
+                                {user.role !== 'admin' && (
+                                  <button
+                                    onClick={() => setDocumentUser(user)}
+                                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" /> View Documents
+                                  </button>
+                                )}
                               </div>
-                            )}
+                            </div>
                           </td>
                           <td className="p-6">
                             <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${
@@ -590,6 +664,13 @@ export default function AdminDashboard() {
                   <p className="text-gray-500 font-medium">No venues registered on the platform yet.</p>
                 </div>
               ) : (
+                <>
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                  <SearchBox value={venueSearch} onChange={setVenueSearch} placeholder="Search title, owner, location, ID..." />
+                  <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-full shadow-sm whitespace-nowrap">
+                    {venueSearch.trim() ? `${filteredVenues.length} of ${allVenues.length} Venues` : `${allVenues.length} Venues Total`}
+                  </span>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
@@ -604,7 +685,10 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {allVenues.map((venue) => (
+                      {filteredVenues.length === 0 && (
+                        <tr><td colSpan="7" className="py-12 text-center text-gray-400 font-bold">No venues match "{venueSearch.trim()}".</td></tr>
+                      )}
+                      {filteredVenues.map((venue) => (
                         <tr key={venue.id} className="hover:bg-gray-50/50 transition-colors">
                           <td className="py-4 text-sm font-bold text-indigo-600">VNE-{venue.id.toString().padStart(3, '0')}</td>
                           <td className="py-4 text-sm font-bold text-gray-900">{venue.title}</td>
@@ -629,11 +713,16 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </div>
           </div>
         )}
       </main>
+
+      {documentUser && (
+        <UserDocumentsModal key={documentUser.id} user={documentUser} onClose={() => setDocumentUser(null)} />
+      )}
     </div>
   );
 }

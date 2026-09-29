@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db'); // Pulls in your MySQL connection from db.js
+const path = require('path');
 const PDFDocument = require('pdfkit');
+const { DOCUMENTS_DIR, removeUserDocuments } = require('../userUploads');
 
 // ==========================================
 // 1. GET ALL PENDING USERS
@@ -9,7 +11,7 @@ const PDFDocument = require('pdfkit');
 router.get('/pending-users', async (req, res) => {
   try {
     const [pendingUsers] = await db.query(
-      "SELECT id, name, email, role, status, created_at, government_id, business_license_id FROM users WHERE status = 'pending'"
+      "SELECT id, name, email, role, status, created_at, government_id, business_license_id, profile_picture, government_id_document, business_license_document FROM users WHERE status = 'pending'"
     );
     res.status(200).json(pendingUsers);
   } catch (error) {
@@ -24,12 +26,45 @@ router.get('/pending-users', async (req, res) => {
 router.get('/users', async (req, res) => {
   try {
     const [allUsers] = await db.query(
-      "SELECT id, name, email, role, status, created_at, government_id, business_license_id FROM users ORDER BY created_at DESC"
+      "SELECT id, name, email, role, status, created_at, government_id, business_license_id, profile_picture, government_id_document, business_license_document FROM users ORDER BY created_at DESC"
     );
     res.status(200).json(allUsers);
   } catch (error) {
     console.error("Error fetching all users:", error);
     res.status(500).json({ message: 'Server error while fetching all users' });
+  }
+});
+
+// ==========================================
+// 1.6 VIEW A USER'S VERIFICATION DOCUMENT
+// ==========================================
+const USER_DOCUMENT_COLUMNS = {
+  'government-id': 'government_id_document',
+  'business-license': 'business_license_document'
+};
+
+router.get('/users/:id/documents/:type', async (req, res) => {
+  const column = USER_DOCUMENT_COLUMNS[req.params.type];
+  if (!column) {
+    return res.status(404).json({ message: 'Unknown document type' });
+  }
+
+  try {
+    const [users] = await db.query(`SELECT ${column} AS document FROM users WHERE id = ?`, [req.params.id]);
+    if (users.length === 0 || !users[0].document) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    res.set('Cache-Control', 'no-store');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.sendFile(path.basename(users[0].document), { root: DOCUMENTS_DIR }, (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ message: 'Document file not found' });
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching user document:", error);
+    res.status(500).json({ message: 'Server error while fetching document' });
   }
 });
 
@@ -63,6 +98,12 @@ router.put('/approve-user/:id', async (req, res) => {
 router.delete('/reject-user/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Remember the user's private documents so the files can be removed too
+    const [documents] = await db.query(
+      "SELECT government_id_document, business_license_document FROM users WHERE id = ?",
+      [id]
+    );
     
     // Delete the unapproved user completely from MySQL
     const [result] = await db.query(
@@ -72,6 +113,10 @@ router.delete('/reject-user/:id', async (req, res) => {
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (documents.length > 0) {
+      removeUserDocuments(documents[0].government_id_document, documents[0].business_license_document);
     }
 
     res.status(200).json({ message: 'User rejected and removed' });
