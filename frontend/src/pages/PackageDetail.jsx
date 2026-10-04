@@ -1,11 +1,39 @@
-import { useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { CheckCircle2, Crown, ArrowLeft, Sparkles } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { CheckCircle2, Crown, ArrowLeft, Sparkles, CalendarDays } from 'lucide-react';
 import { getPackageBySlug } from '../data/packages';
 
 export default function PackageDetail() {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const pkg = getPackageBySlug(slug);
+
+  const [checkDate, setCheckDate] = useState('');
+  const [availabilityResult, setAvailabilityResult] = useState(null);
+  const [isChecking, setIsChecking] = useState(false);
+
+  const handleCheckAvailability = async () => {
+    if (!checkDate) return alert("Please select a date to check availability.");
+    setIsChecking(true);
+    setAvailabilityResult(null);
+    try {
+      const res = await fetch(`http://localhost:5000/api/public/check-availability?type=package&slug=${encodeURIComponent(slug)}&date=${checkDate}`);
+      const data = await res.json();
+      setAvailabilityResult(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const handleSelectPackage = () => {
+    if (!localStorage.getItem('token')) {
+      navigate('/login');
+    } else {
+      navigate('/customer-dashboard', { state: { activeTab: 'explore-vendors' } });
+    }
+  };
 
   // Land at the top of the package instead of keeping the grid scroll position
   useEffect(() => {
@@ -162,7 +190,36 @@ export default function PackageDetail() {
                 ))}
               </ul>
 
-              <button className={`w-full py-4 rounded-xl font-bold text-sm transition-all shadow-md ${pkg.btn}`}>
+              <div className="mb-4">
+                <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${pkg.popular ? 'text-indigo-200' : 'text-gray-500'}`}>Select Date</label>
+                <input 
+                  type="date" 
+                  value={checkDate}
+                  onChange={(e) => { setCheckDate(e.target.value); setAvailabilityResult(null); }}
+                  className={`w-full px-4 py-3 rounded-xl font-medium focus:outline-none ${pkg.popular ? 'bg-indigo-900/50 border border-indigo-500/30 text-white focus:ring-1 focus:ring-indigo-300' : 'bg-white border border-gray-200 text-gray-900 focus:ring-2 focus:ring-indigo-500'}`}
+                />
+              </div>
+
+              {availabilityResult && (
+                <div className={`mb-4 p-4 rounded-xl flex items-center gap-3 ${availabilityResult.available ? 'bg-green-500/20 border border-green-500/30 text-green-100' : 'bg-red-500/20 border border-red-500/30 text-red-100'}`}>
+                  {availabilityResult.available ? (
+                    <>
+                      <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0">
+                        <img src={pkg.gallery && pkg.gallery.length > 0 ? pkg.gallery[0] : ''} alt="Available" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="font-bold text-sm">{availabilityResult.message}</div>
+                    </>
+                  ) : (
+                    <div className="font-bold text-sm w-full text-center">{availabilityResult.message}</div>
+                  )}
+                </div>
+              )}
+
+              <button onClick={handleCheckAvailability} disabled={isChecking} className={`w-full py-4 rounded-xl font-bold text-sm transition-all shadow-md mb-3 flex items-center justify-center disabled:opacity-70 ${pkg.popular ? 'bg-indigo-600 text-white hover:bg-indigo-500' : 'bg-gray-100 text-gray-900 hover:bg-gray-200'}`}>
+                <CalendarDays className="w-4 h-4 mr-2" />
+                {isChecking ? 'Checking...' : 'Check Availability'}
+              </button>
+              <button onClick={handleSelectPackage} className={`w-full py-4 rounded-xl font-bold text-sm transition-all shadow-md ${pkg.btn}`}>
                 Select Package
               </button>
 

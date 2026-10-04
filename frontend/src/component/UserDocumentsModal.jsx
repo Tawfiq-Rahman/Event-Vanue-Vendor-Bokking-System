@@ -51,14 +51,19 @@ export default function UserDocumentsModal({ user, onClose }) {
   const [profileFailed, setProfileFailed] = useState(false);
 
   const isBusinessRole = user.role === 'vendor' || user.role === 'venue_owner';
-  const documentTypes = DOCUMENT_TYPES.filter((doc) => doc.type !== 'business-license' || isBusinessRole || user[doc.column]);
+  
+  // Only show document types that this user actually has, EXCEPT for business-license which we expect business roles to have.
+  const documentTypes = DOCUMENT_TYPES.filter((doc) => {
+    if (doc.type === 'business-license' && isBusinessRole) return true;
+    return !!user[doc.column];
+  });
 
   // Documents are private, so they are fetched through the admin API and shown as local blob URLs
   useEffect(() => {
     let cancelled = false;
     const objectUrls = [];
 
-    DOCUMENT_TYPES.forEach(async ({ type, column }) => {
+    documentTypes.forEach(async ({ type, column }) => {
       if (!user[column]) return;
       setDocuments((prev) => ({ ...prev, [type]: { status: 'loading' } }));
       try {
@@ -80,6 +85,7 @@ export default function UserDocumentsModal({ user, onClose }) {
       cancelled = true;
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Close with the Escape key
@@ -137,25 +143,27 @@ export default function UserDocumentsModal({ user, onClose }) {
           </button>
         </div>
 
-        <div className={`p-6 overflow-y-auto grid grid-cols-1 gap-6 ${documentTypes.length > 1 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
-          <div>
-            <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-3">Profile Picture</p>
-            <PreviewBox>
-              {user.profile_picture && !profileFailed
-                ? <img src={user.profile_picture} alt={user.name} className="w-full h-full object-contain" onError={() => setProfileFailed(true)} />
-                : <EmptyState icon={ImageOff} text={user.profile_picture ? 'Could not load picture' : 'Not provided'} />}
-            </PreviewBox>
-            {user.profile_picture && !profileFailed && (
-              <a
-                href={user.profile_picture}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
-              >
-                <ExternalLink className="w-3.5 h-3.5" /> Open full size
-              </a>
-            )}
-          </div>
+        <div className={`p-6 overflow-y-auto grid grid-cols-1 gap-6 md:grid-cols-2`}>
+          {user.profile_picture && (
+            <div>
+              <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-3">Profile Picture</p>
+              <PreviewBox>
+                {!profileFailed
+                  ? <img src={user.profile_picture} alt={user.name} className="w-full h-full object-contain" onError={() => setProfileFailed(true)} />
+                  : <EmptyState icon={ImageOff} text="Could not load picture" />}
+              </PreviewBox>
+              {!profileFailed && (
+                <a
+                  href={user.profile_picture}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Open full size
+                </a>
+              )}
+            </div>
+          )}
 
           {documentTypes.map((doc) => (
             <div key={doc.type}>

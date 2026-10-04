@@ -357,6 +357,32 @@ router.post('/messages', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
+// 10.5 UNREAD MESSAGES
+// ==========================================
+router.get('/messages/unread/count', authenticateToken, async (req, res) => {
+  try {
+    const [result] = await db.query(
+      'SELECT COUNT(*) as unreadCount FROM messages WHERE receiver_id = ? AND is_read = 0',
+      [req.user.id]
+    );
+    res.json({ unreadCount: result[0].unreadCount || 0 });
+  } catch (error) {
+    console.error("Error fetching unread count:", error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.put('/messages/mark-read', authenticateToken, async (req, res) => {
+  try {
+    await db.query('UPDATE messages SET is_read = 1 WHERE receiver_id = ?', [req.user.id]);
+    res.json({ message: 'Messages marked as read' });
+  } catch (error) {
+    console.error("Error marking messages as read:", error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ==========================================
 // 11. GET CHAT CONTACTS (Owners & Vendors involved in bookings)
 // ==========================================
 router.get('/chat-contacts', authenticateToken, async (req, res) => {

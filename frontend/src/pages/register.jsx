@@ -163,16 +163,7 @@ export default function Register() {
 
               {(formData.role === 'vendor' || formData.role === 'venue_owner') && (
                 <>
-                  <div>
-                    <label className="block text-xs font-black text-gray-700 uppercase mb-1.5 tracking-wider ml-1">Government ID</label>
-                    <input
-                      type="text"
-                      required
-                      className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                      placeholder="Enter ID number"
-                      onChange={(e) => setFormData({ ...formData, government_id: e.target.value })}
-                    />
-                  </div>
+
                   <div>
                     <label className="block text-xs font-black text-gray-700 uppercase mb-1.5 tracking-wider ml-1">Business License ID</label>
                     <input
@@ -185,35 +176,6 @@ export default function Register() {
                   </div>
                 </>
               )}
-
-              <div>
-                <label className="block text-xs font-black text-gray-700 uppercase mb-1.5 tracking-wider ml-1">
-                  Profile Picture
-                </label>
-                <input
-                  type="file"
-                  name="profile_picture"
-                  required
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  className={fileInputClass}
-                  onChange={handleFileChange}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-black text-gray-700 uppercase mb-1.5 tracking-wider ml-1">
-                  Government ID Card
-                </label>
-                <input
-                  type="file"
-                  name="government_id_document"
-                  required
-                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
-                  className={fileInputClass}
-                  onChange={handleFileChange}
-                />
-                <p className="text-[11px] text-gray-400 font-medium mt-1 ml-1">Image or PDF, max 5 MB</p>
-              </div>
 
               {isBusinessRole && (
                 <div>
