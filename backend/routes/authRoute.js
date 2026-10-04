@@ -16,8 +16,8 @@ router.post('/register', registrationUploads, async (req, res) => {
 
   // Uploaded files (profile picture, government ID card, business license)
   const uploads = req.files || {};
-  const profilePicture = uploads.profile_picture?.[0];
-  const governmentIdDocument = uploads.government_id_document?.[0];
+  let profilePicture = uploads.profile_picture?.[0];
+  let governmentIdDocument = uploads.government_id_document?.[0];
   let businessLicenseDocument = uploads.business_license_document?.[0];
 
   // Removes any saved uploads before sending an error back
@@ -30,28 +30,28 @@ router.post('/register', registrationUploads, async (req, res) => {
     return rejectRegistration(400, 'Please provide all required fields.');
   }
 
-  if (isBusinessRole && (!government_id || !business_license_id)) {
-    return rejectRegistration(400, 'Government ID and Business License ID are required for vendors and venue owners.');
-  }
 
-  // Every account needs a profile picture and a government ID card for admin verification
-  if (!profilePicture) {
-    return rejectRegistration(400, 'Please upload a profile picture.');
-  }
-
-  if (!governmentIdDocument) {
-    return rejectRegistration(400, 'Please upload your Government ID card for verification.');
-  }
-
-  if (isBusinessRole && !businessLicenseDocument) {
-    return rejectRegistration(400, 'Please upload your Business License for verification.');
-  }
-
-  // Customers don't have a business license, so ignore one if it was sent
-  if (!isBusinessRole && businessLicenseDocument) {
-    removeUploadedFiles({ business_license_document: [businessLicenseDocument] });
+  if (isBusinessRole) {
+    if (!business_license_id) {
+      return rejectRegistration(400, 'Business License ID is required for vendors and venue owners.');
+    }
+    if (!businessLicenseDocument) {
+      return rejectRegistration(400, 'Please upload your Business License for verification.');
+    }
+  } else {
+    // Customers don't need business license either
     businessLicenseDocument = null;
   }
+
+  // Always remove profile picture and government ID for all roles as they are removed from the frontend
+  if (req.files) {
+    if (req.files.profile_picture) removeUploadedFiles({ profile_picture: req.files.profile_picture });
+    if (req.files.government_id_document) removeUploadedFiles({ government_id_document: req.files.government_id_document });
+    if (!isBusinessRole && req.files.business_license_document) removeUploadedFiles({ business_license_document: req.files.business_license_document });
+  }
+
+  profilePicture = null;
+  governmentIdDocument = null;
 
   let userCreated = false;
   try {

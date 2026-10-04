@@ -397,7 +397,7 @@ export default function AdminDashboard() {
                                     {user.business_license_id && <p className="text-gray-600"><span className="font-bold">License:</span> {user.business_license_id}</p>}
                                   </div>
                                 )}
-                                {user.role !== 'admin' && (
+                                {(user.role === 'vendor' || user.role === 'venue_owner' || user.government_id_document || user.profile_picture) && (
                                   <button
                                     onClick={() => setDocumentUser(user)}
                                     className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
@@ -494,7 +494,7 @@ export default function AdminDashboard() {
                                     {user.business_license_id && <p className="text-gray-600"><span className="font-bold">License:</span> {user.business_license_id}</p>}
                                   </div>
                                 )}
-                                {user.role !== 'admin' && (
+                                {(user.role === 'vendor' || user.role === 'venue_owner' || user.government_id_document || user.profile_picture) && (
                                   <button
                                     onClick={() => setDocumentUser(user)}
                                     className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"

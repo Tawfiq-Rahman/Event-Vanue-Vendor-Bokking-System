@@ -1,12 +1,40 @@
-import { useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Star, MapPin, ArrowLeft, CheckCircle2, CalendarDays } from 'lucide-react';
 import { getVendorBySlug } from '../data/vendors';
 import { heroSrc } from '../data/images';
 
 export default function VendorDetail() {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const vendor = getVendorBySlug(slug);
+
+  const [checkDate, setCheckDate] = useState('');
+  const [availabilityResult, setAvailabilityResult] = useState(null);
+  const [isChecking, setIsChecking] = useState(false);
+
+  const handleCheckAvailability = async () => {
+    if (!checkDate) return alert("Please select a date to check availability.");
+    setIsChecking(true);
+    setAvailabilityResult(null);
+    try {
+      const res = await fetch(`http://localhost:5000/api/public/check-availability?type=vendor&slug=${encodeURIComponent(slug)}&date=${checkDate}`);
+      const data = await res.json();
+      setAvailabilityResult(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const handleRequestQuote = () => {
+    if (!localStorage.getItem('token')) {
+      navigate('/login');
+    } else {
+      navigate('/customer-dashboard', { state: { activeTab: 'explore-vendors' } });
+    }
+  };
 
   // Land at the top of the profile instead of keeping the grid scroll position
   useEffect(() => {
@@ -133,11 +161,36 @@ export default function VendorDetail() {
                 <Star className="w-4 h-4 mr-1.5 text-yellow-500 fill-yellow-500" /> {vendor.rating} rating
               </div>
 
-              <button className="w-full py-4 rounded-xl font-bold text-sm transition-all shadow-md bg-indigo-600 text-white hover:bg-indigo-700 flex items-center justify-center">
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Date</label>
+                <input 
+                  type="date" 
+                  value={checkDate}
+                  onChange={(e) => { setCheckDate(e.target.value); setAvailabilityResult(null); }}
+                  className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                />
+              </div>
+
+              {availabilityResult && (
+                <div className={`mb-4 p-4 rounded-xl flex items-center gap-3 ${availabilityResult.available ? 'bg-green-50 border border-green-100 text-green-700' : 'bg-red-50 border border-red-100 text-red-700'}`}>
+                  {availabilityResult.available ? (
+                    <>
+                      <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0">
+                        <img src={vendor.gallery && vendor.gallery.length > 0 ? vendor.gallery[0] : vendor.img} alt="Available" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="font-bold text-sm">{availabilityResult.message}</div>
+                    </>
+                  ) : (
+                    <div className="font-bold text-sm w-full text-center">{availabilityResult.message}</div>
+                  )}
+                </div>
+              )}
+
+              <button onClick={handleCheckAvailability} disabled={isChecking} className="w-full py-4 rounded-xl font-bold text-sm transition-all shadow-md bg-indigo-600 text-white hover:bg-indigo-700 flex items-center justify-center disabled:opacity-70">
                 <CalendarDays className="w-4 h-4 mr-2" />
-                Check Availability
+                {isChecking ? 'Checking...' : 'Check Availability'}
               </button>
-              <button className="w-full mt-3 py-4 rounded-xl font-bold text-sm transition-all bg-gray-100 text-gray-900 hover:bg-gray-200">
+              <button onClick={handleRequestQuote} className="w-full mt-3 py-4 rounded-xl font-bold text-sm transition-all bg-gray-100 text-gray-900 hover:bg-gray-200">
                 Request a Quote
               </button>
 
