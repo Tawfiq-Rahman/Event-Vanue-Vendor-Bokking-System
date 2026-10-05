@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Star, MapPin, ArrowLeft, X, SearchX } from 'lucide-react';
+import SearchBar from '../component/SearchBar';
 
 export default function Venues() {
   const [venues, setVenues] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [nameSearch, setNameSearch] = useState('');
   const [searchParams] = useSearchParams();
+
+  const searchText = nameSearch.trim().toLowerCase();
+  const filteredVenues = venues.filter((venue) => !searchText || (venue.title || '').toLowerCase().includes(searchText));
 
   const searchDate = searchParams.get('date');
   const searchCapacity = searchParams.get('capacity');
@@ -48,6 +53,10 @@ export default function Venues() {
           </p>
         </div>
 
+        <div className="mb-10">
+          <SearchBar value={nameSearch} onChange={setNameSearch} placeholder="Search venues by name..." />
+        </div>
+
         {hasFilters && (
           <div className="flex flex-wrap justify-center gap-3 mb-12">
             {searchDate && (
@@ -86,9 +95,20 @@ export default function Venues() {
               View All Venues
             </Link>
           </div>
+        ) : filteredVenues.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="bg-white p-6 rounded-full shadow-sm mb-6">
+              <SearchX className="w-12 h-12 text-gray-400" />
+            </div>
+            <h3 className="text-2xl font-black text-gray-900 mb-2">No venues match "{nameSearch.trim()}"</h3>
+            <p className="text-gray-500 mb-8 max-w-md">Try a different venue name or check the spelling.</p>
+            <button onClick={() => setNameSearch('')} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-sm hover:bg-indigo-700 transition-colors">
+              Clear Search
+            </button>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {venues.map((venue) => {
+            {filteredVenues.map((venue) => {
               const slug = venue.title.toLowerCase().replace(/ /g, '-');
               return (
                 <Link to={`/venues/${slug}`} key={venue.id || slug} className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-300 cursor-pointer group flex flex-col">

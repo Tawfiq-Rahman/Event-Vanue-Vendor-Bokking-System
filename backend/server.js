@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 const db = require('./db');
+const ensureUserDocumentColumns = require('./migrate_user_documents');
 
 // 1. Import your dedicated route files
 const adminRoutes = require('./routes/adminRoutes');
@@ -56,7 +57,7 @@ app.get('/api/venues/public', async (req, res) => {
     if (date) {
       query += ` AND v.id NOT IN (
         SELECT venue_id FROM bookings 
-        WHERE event_date = ? AND booking_status IN ('pending', 'confirmed')
+        WHERE event_date = ? AND booking_status IN ('pending', 'confirmed', 'completed')
       )`;
       params.push(date);
     }
@@ -86,6 +87,56 @@ app.get('/api/vendors/public', async (req, res) => {
   }
 });
 
+app.get('/api/public/check-availability', async (req, res) => {
+  try {
+    const { type, slug, date } = req.query;
+    
+    if (type === 'venue') {
+      const [venues] = await db.query("SELECT id FROM venues WHERE LOWER(REPLACE(title, ' ', '-')) = ?", [slug]);
+      if (venues.length === 0) return res.json({ available: true, message: 'The venue is available' });
+      
+      const venueId = venues[0].id;
+      const [bookings] = await db.query(
+        "SELECT id FROM bookings WHERE venue_id = ? AND event_date = ? AND booking_status IN ('pending', 'confirmed', 'completed')",
+        [venueId, date]
+      );
+      
+      if (bookings.length > 0) {
+        res.json({ available: false, message: 'The venue is booked at that time slot' });
+      } else {
+        res.json({ available: true, message: 'The venue is available' });
+      }
+    } else if (type === 'vendor' || type === 'package') {
+      // For vendors, match on business_name
+      let matchName = slug;
+      if (type === 'package') {
+        // Just mock available for packages if no vendor matches directly, as packages in this app are static
+        return res.json({ available: true, message: 'The package is available' });
+      }
+      
+      const [vendors] = await db.query("SELECT id FROM vendors WHERE LOWER(REPLACE(REPLACE(title, '&', 'and'), ' ', '-')) = ?", [matchName]);
+      if (vendors.length === 0) return res.json({ available: true, message: 'The vendor is available' });
+      
+      const vendorId = vendors[0].id;
+      const [bookings] = await db.query(
+        "SELECT bv.id FROM booking_vendors bv JOIN bookings b ON bv.booking_id = b.id WHERE bv.vendor_id = ? AND b.event_date = ? AND bv.service_status IN ('pending', 'accepted', 'preparing', 'ready') AND b.booking_status IN ('pending', 'confirmed', 'completed')",
+        [vendorId, date]
+      );
+      
+      if (bookings.length > 0) {
+        res.json({ available: false, message: 'The vendor is booked at that time slot' });
+      } else {
+        res.json({ available: true, message: 'The vendor is available' });
+      }
+    } else {
+      res.json({ available: true, message: 'Available' });
+    }
+  } catch (err) {
+    console.error("Error checking availability:", err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // 4. Health check endpoint (Great for testing if the DB is connected!)
 app.get('/api/health', async (req, res) => {
   try {
@@ -97,5 +148,8 @@ app.get('/api/health', async (req, res) => {
 });
 
 // 5. Start the server
+// Make sure the users table has the registration document columns
+ensureUserDocumentColumns().catch((error) => console.error('Could not update users table:', error.message));
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));

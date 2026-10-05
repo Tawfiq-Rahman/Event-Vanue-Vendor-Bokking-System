@@ -198,7 +198,9 @@ CREATE TABLE `users` (
   `address` text DEFAULT NULL,
   `profile_picture` text DEFAULT NULL,
   `government_id` varchar(255) DEFAULT NULL,
-  `business_license_id` varchar(255) DEFAULT NULL
+  `business_license_id` varchar(255) DEFAULT NULL,
+  `government_id_document` text DEFAULT NULL,
+  `business_license_document` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --

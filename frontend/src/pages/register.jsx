@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, MapPin, Camera } from 'lucide-react';
 
+const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5 MB, same limit as the backend
+const fileInputClass = "w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none cursor-pointer file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-xs file:font-bold file:cursor-pointer hover:file:bg-indigo-100";
+
 export default function Register() {
   const [formData, setFormData] = useState({
     name: '',
@@ -12,20 +15,46 @@ export default function Register() {
     government_id: '',
     business_license_id: ''
   });
+  const [files, setFiles] = useState({
+    profile_picture: null,
+    government_id_document: null,
+    business_license_document: null
+  });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
+
+  const isBusinessRole = formData.role === 'vendor' || formData.role === 'venue_owner';
+
+  const handleFileChange = (e) => {
+    const { name, files: selected } = e.target;
+    const file = selected[0] || null;
+    if (file && file.size > MAX_UPLOAD_SIZE) {
+      setError('Each uploaded file must be 5 MB or smaller.');
+      e.target.value = '';
+      setFiles({ ...files, [name]: null });
+      return;
+    }
+    setError('');
+    setFiles({ ...files, [name]: file });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
+    // Send as multipart so the profile picture and ID documents can be uploaded
+    const payload = new FormData();
+    Object.entries(formData).forEach(([key, value]) => payload.append(key, value));
+    if (files.profile_picture) payload.append('profile_picture', files.profile_picture);
+    if (files.government_id_document) payload.append('government_id_document', files.government_id_document);
+    if (isBusinessRole && files.business_license_document) payload.append('business_license_document', files.business_license_document);
+
     try {
       const res = await fetch('http://localhost:5000/api/auth/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: payload
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
@@ -134,16 +163,7 @@ export default function Register() {
 
               {(formData.role === 'vendor' || formData.role === 'venue_owner') && (
                 <>
-                  <div>
-                    <label className="block text-xs font-black text-gray-700 uppercase mb-1.5 tracking-wider ml-1">Government ID</label>
-                    <input
-                      type="text"
-                      required
-                      className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                      placeholder="Enter ID number"
-                      onChange={(e) => setFormData({ ...formData, government_id: e.target.value })}
-                    />
-                  </div>
+
                   <div>
                     <label className="block text-xs font-black text-gray-700 uppercase mb-1.5 tracking-wider ml-1">Business License ID</label>
                     <input
@@ -155,6 +175,21 @@ export default function Register() {
                     />
                   </div>
                 </>
+              )}
+
+              {isBusinessRole && (
+                <div>
+                  <label className="block text-xs font-black text-gray-700 uppercase mb-1.5 tracking-wider ml-1">Business License</label>
+                  <input
+                    type="file"
+                    name="business_license_document"
+                    required
+                    accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                    className={fileInputClass}
+                    onChange={handleFileChange}
+                  />
+                  <p className="text-[11px] text-gray-400 font-medium mt-1 ml-1">Image or PDF, max 5 MB</p>
+                </div>
               )}
             </div>
 

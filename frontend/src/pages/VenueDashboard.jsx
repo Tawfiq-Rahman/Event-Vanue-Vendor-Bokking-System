@@ -35,6 +35,25 @@ export default function VenueDashboard() {
   const [announcements, setAnnouncements] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [activeContactTab, setActiveContactTab] = useState('customer');
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/venue-owner/messages/unread/count', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadCount(data.unreadCount);
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -211,6 +230,10 @@ export default function VenueDashboard() {
     if (activeTab === 'messages') {
       fetchChatContacts();
       fetchAnnouncements();
+      fetch('http://localhost:5000/api/venue-owner/messages/mark-read', {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      }).then(() => setUnreadCount(0)).catch(console.error);
     }
   }, [activeTab]);
 
@@ -453,6 +476,11 @@ export default function VenueDashboard() {
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-indigo-600' : 'text-gray-400'}`} />
                 {item.label}
+                {item.id === 'messages' && unreadCount > 0 && (
+                  <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm">
+                    {unreadCount}
+                  </span>
+                )}
               </button>
             );
           })}

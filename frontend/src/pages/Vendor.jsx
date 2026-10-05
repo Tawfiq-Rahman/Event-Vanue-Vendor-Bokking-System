@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Star, MapPin, Camera, Palette, Utensils, Box } from 'lucide-react';
+import SearchBar from '../component/SearchBar';
 
 export default function Vendor() {
   const [activeCategory, setActiveCategory] = useState('All Vendors');
+  const [vendorSearch, setVendorSearch] = useState('');
   const [dbVendors, setDbVendors] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -32,9 +34,14 @@ export default function Vendor() {
     }
   };
 
-  const filteredVendors = activeCategory === 'All Vendors' 
-    ? dbVendors 
-    : dbVendors.filter(vendor => vendor.service_type.toLowerCase() === activeCategory.toLowerCase());
+  // Category buttons and the search box work together: search matches vendor name or category
+  const searchText = vendorSearch.trim().toLowerCase();
+  const filteredVendors = dbVendors.filter((vendor) => {
+    const category = (vendor.service_type || '').toLowerCase();
+    const inCategory = activeCategory === 'All Vendors' || category === activeCategory.toLowerCase();
+    const matchesSearch = !searchText || (vendor.title || '').toLowerCase().includes(searchText) || category.includes(searchText);
+    return inCategory && matchesSearch;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
@@ -62,6 +69,10 @@ export default function Vendor() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
+        <div className="mb-8">
+          <SearchBar value={vendorSearch} onChange={setVendorSearch} placeholder="Search vendors by name or category..." />
+        </div>
+
         {/* Functional Category Filters */}
         <div className="flex flex-wrap justify-center gap-3 mb-12">
           {['All Vendors', 'Photography', 'Catering', 'Decoration'].map((cat) => (
@@ -114,10 +125,15 @@ export default function Vendor() {
           </div>
         )}
         
-        {/* Fallback if a category is empty (though ours are full) */}
-        {filteredVendors.length === 0 && (
+        {/* Fallback if a category / search has no results */}
+        {!isLoading && filteredVendors.length === 0 && (
           <div className="text-center py-12 text-gray-500 font-medium">
-            No vendors found for this category.
+            {searchText ? (
+              <>
+                No vendors match "{vendorSearch.trim()}"{activeCategory !== 'All Vendors' && ` in ${activeCategory}`}.{' '}
+                <button onClick={() => setVendorSearch('')} className="text-indigo-600 font-bold hover:underline">Clear search</button>
+              </>
+            ) : 'No vendors found for this category.'}
           </div>
         )}
 
